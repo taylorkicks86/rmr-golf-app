@@ -34,7 +34,10 @@ export async function updateSession(request: NextRequest) {
   const isPendingApprovalRoute = pathname === "/pending-approval";
   const isProfileErrorRoute = pathname === "/profile-error";
   const isAuthCallbackRoute = pathname.startsWith("/auth/callback");
-  const isPublicRoute = isLoginRoute || isSignupRoute || isAuthCallbackRoute;
+  const isAuthConfirmRoute = pathname.startsWith("/auth/confirm");
+  const isUpdatePasswordRoute = pathname === "/update-password";
+  const isPublicRoute =
+    isLoginRoute || isSignupRoute || isAuthCallbackRoute || isAuthConfirmRoute || isUpdatePasswordRoute;
 
   const createRedirectResponse = (redirectUrl: URL) => {
     const redirectResponse = NextResponse.redirect(redirectUrl);
