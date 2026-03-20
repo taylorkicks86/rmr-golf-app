@@ -6,8 +6,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type ChangePasswordFormProps = {
-  email: string;
-  userId: string;
+  email?: string;
+  userId?: string;
 };
 
 type Message = {
@@ -18,7 +18,6 @@ type Message = {
 const MIN_PASSWORD_LENGTH = 6;
 
 export function ChangePasswordForm({ email, userId }: ChangePasswordFormProps) {
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -30,7 +29,7 @@ export function ChangePasswordForm({ email, userId }: ChangePasswordFormProps) {
     event.preventDefault();
     setMessage(null);
 
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       setMessage({ type: "error", text: "All fields are required." });
       return;
     }
@@ -45,29 +44,7 @@ export function ChangePasswordForm({ email, userId }: ChangePasswordFormProps) {
       return;
     }
 
-    if (newPassword === currentPassword) {
-      setMessage({ type: "error", text: "New password must be different from your current password." });
-      return;
-    }
-
     setSaving(true);
-
-    const { data: signInData, error: verifyError } = await supabase.auth.signInWithPassword({
-      email,
-      password: currentPassword,
-    });
-
-    if (verifyError) {
-      setMessage({ type: "error", text: "Current password is incorrect." });
-      setSaving(false);
-      return;
-    }
-
-    if (signInData.user?.id !== userId) {
-      setMessage({ type: "error", text: "Current password verification failed for this account." });
-      setSaving(false);
-      return;
-    }
 
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
     if (updateError) {
@@ -76,7 +53,6 @@ export function ChangePasswordForm({ email, userId }: ChangePasswordFormProps) {
       return;
     }
 
-    setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setMessage({ type: "success", text: "Password updated successfully." });
@@ -87,21 +63,6 @@ export function ChangePasswordForm({ email, userId }: ChangePasswordFormProps) {
   return (
     <div className="rounded-2xl border border-emerald-200/70 bg-white/95 p-5 shadow-lg backdrop-blur sm:p-6">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div>
-          <label htmlFor="current-password" className="mb-1 block text-sm font-medium text-zinc-700">
-            Current Password
-          </label>
-          <input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(event) => setCurrentPassword(event.target.value)}
-            required
-            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-base text-zinc-900 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            placeholder="••••••••"
-          />
-        </div>
-
         <div>
           <label htmlFor="new-password" className="mb-1 block text-sm font-medium text-zinc-700">
             New Password
