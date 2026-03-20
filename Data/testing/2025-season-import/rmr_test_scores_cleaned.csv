@@ -1,0 +1,151 @@
+week,player_name,status,gross_score,handicap,net,hole_1,hole_2,hole_3,hole_4,hole_5,hole_6,hole_7,hole_8,hole_9
+1,Nick Kolb,played,43,-3,40,5,5,3,6,4,6,3,5,6
+1,Will Adjorlolo,played,50,-10,40,6,7,4,6,6,6,3,5,7
+1,Jarrod Casey,played,41,-7,34,4,5,4,4,4,6,4,4,6
+1,Adam Chisholm,played,55,-8,47,6,7,5,6,7,5,5,6,8
+1,Mark Edinger,played,52,-11,41,4,5,4,4,6,9,4,7,9
+1,Connor Sullivan,played,51,-8,43,5,5,5,6,5,5,6,5,9
+1,Matt Mackin & Sam Cerrato,played,36,3,39,4,4,3,4,4,5,3,4,5
+1,Lateef Taylor,played,59,-13,46,8,7,4,7,6,8,6,5,8
+1,Rob Anderson,played,46,-8,38,6,4,3,6,5,5,3,7,7
+1,Korey Cohan & Conor Purvis,played,51,-6,45,4,5,5,5,6,9,4,7,6
+2,Nick Kolb,played,39,-4,35,4,5,4,4,5,5,3,4,5
+2,Will Adjorlolo,played,53,-10,43,4,7,4,5,9,7,4,7,6
+2,Jarrod Casey,played,41,-7,34,4,6,3,5,4,5,3,6,5
+2,Adam Chisholm,played,43,-9,34,4,4,4,5,4,6,4,4,8
+2,Mark Edinger,played,51,-12,39,6,6,6,4,5,8,5,4,7
+2,Connor Sullivan,played,52,-9,43,6,6,3,6,7,7,3,7,7
+2,Matt Mackin & Sam Cerrato,played,54,-14,40,6,5,5,7,7,6,5,4,9
+2,Lateef Taylor,played,59,-13,46,7,5,6,7,9,7,3,7,8
+2,Rob Anderson,played,48,-8,40,7,4,4,5,5,5,4,7,7
+2,Korey Cohan & Conor Purvis,played,51,-6,45,4,6,3,7,5,8,4,8,6
+3,Nick Kolb,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Will Adjorlolo,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Jarrod Casey,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Adam Chisholm,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Mark Edinger,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Connor Sullivan,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Matt Mackin & Sam Cerrato,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Lateef Taylor,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Rob Anderson,Rain-out,Rain-out,,DNP,,,,,,,,,
+3,Korey Cohan & Conor Purvis,Rain-out,Rain-out,,DNP,,,,,,,,,
+4,Nick Kolb,played,39,-3,36,4,5,3,5,4,5,3,4,6
+4,Will Adjorlolo,played,50,-10,40,5,6,5,5,7,7,3,5,7
+4,Jarrod Casey,played,44,-7,37,6,4,4,5,5,5,3,6,6
+4,Adam Chisholm,played,43,-9,34,6,4,3,5,4,6,5,4,6
+4,Mark Edinger,played,52,-11,41,5,7,4,7,5,8,4,6,6
+4,Connor Sullivan,played,51,-9,42,9,6,3,5,5,7,3,7,6
+4,Matt Mackin & Sam Cerrato,played,39,2,41,4,5,3,5,4,5,3,4,6
+4,Lateef Taylor,played,53,-13,40,6,5,3,6,7,6,5,7,8
+4,Rob Anderson,played,45,-8,37,7,5,3,5,5,6,5,4,5
+4,Korey Cohan & Conor Purvis,played,43,-9,34,6,5,3,5,4,5,3,6,6
+5,Nick Kolb,played,41,-3,38,5,5,3,6,4,5,3,4,6
+5,Will Adjorlolo,played,47,-9,38,6,4,3,6,6,6,3,5,8
+5,Jarrod Casey,played,45,-7,38,6,6,5,4,5,6,4,4,5
+5,Adam Chisholm,played,46,-9,37,4,5,3,5,6,9,4,5,5
+5,Mark Edinger,played,43,-11,32,4,4,4,4,5,5,5,5,7
+5,Connor Sullivan,played,46,-9,37,6,5,4,4,5,8,4,4,6
+5,Matt Mackin & Sam Cerrato,played,48,-14,34,5,4,3,8,7,5,5,5,6
+5,Lateef Taylor,played,62,-13,49,7,5,4,8,7,8,8,6,9
+5,Rob Anderson,played,42,-8,34,4,5,3,4,4,7,3,7,5
+5,Korey Cohan & Conor Purvis,DNP,DNP,-9,DNP,,,,,,,,,
+6,Nick Kolb,played,41,-3,38,4,6,3,4,5,5,3,5,6
+6,Will Adjorlolo,played,54,-9,45,5,7,5,5,7,7,4,7,7
+6,Jarrod Casey,played,45,-8,37,6,5,3,4,4,8,4,5,6
+6,Adam Chisholm,played,46,-9,37,5,6,3,5,5,8,3,5,6
+6,Mark Edinger,DNP,DNP,-10,DNP,,,,,,,,,
+6,Connor Sullivan,played,44,-9,35,5,5,3,5,5,6,3,4,8
+6,Matt Mackin & Sam Cerrato,played,57,-14,43,6,9,6,5,5,8,4,5,9
+6,Lateef Taylor,played,67,-13,54,8,8,6,9,4,9,6,8,9
+6,Rob Anderson,played,41,-8,33,6,4,3,4,4,6,4,5,5
+6,Korey Cohan & Conor Purvis,played,52,-8,44,8,5,5,5,5,7,3,6,8
+7,Nick Kolb,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Will Adjorlolo,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Jarrod Casey,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Adam Chisholm,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Mark Edinger,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Connor Sullivan,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Matt Mackin & Sam Cerrato,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Lateef Taylor,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Rob Anderson,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+7,Korey Cohan & Conor Purvis,Juneteenth,Juneteenth,,DNP,,,,,,,,,
+8,Nick Kolb,played,42,-3,39,4,5,3,4,4,6,4,6,6
+8,Will Adjorlolo,played,45,-9,36,4,6,3,5,6,6,3,4,8
+8,Jarrod Casey,played,45,-7,38,4,8,3,4,6,5,4,5,6
+8,Adam Chisholm,DNP,DNP,-9,DNP,,,,,,,,,
+8,Mark Edinger,DNP,DNP,-7,DNP,,,,,,,,,
+8,Connor Sullivan,played,41,-9,32,4,5,4,4,5,6,3,5,5
+8,Matt Mackin & Sam Cerrato,played,48,-14,34,6,5,4,4,4,6,6,6,7
+8,Lateef Taylor,played,43,-13,30,5,4,3,7,4,5,4,5,6
+8,Rob Anderson,played,39,-8,31,4,4,3,5,4,6,3,4,6
+8,Korey Cohan & Conor Purvis,played,40,-8,32,4,4,3,5,5,6,3,4,6
+9,Nick Kolb,played,40,-3,37,4,4,5,4,4,6,3,5,5
+9,Will Adjorlolo,played,37,-8,29,4,4,3,4,4,5,3,4,6
+9,Jarrod Casey,played,38,-7,31,4,5,3,4,5,5,3,4,5
+9,Adam Chisholm,DNP,DNP,-9,DNP,,,,,,,,,
+9,Mark Edinger,played,45,-6,39,4,4,6,4,5,6,6,4,6
+9,Connor Sullivan,played,43,-8,35,5,4,3,5,5,6,4,5,6
+9,Matt Mackin & Sam Cerrato,played,33,2,35,3,4,3,4,4,4,3,4,4
+9,Lateef Taylor,played,54,-13,41,7,5,3,5,4,9,4,9,8
+9,Rob Anderson,DNP,DNP,-8,DNP,,,,,,,,,
+9,Korey Cohan & Conor Purvis,played,44,-7,37,4,5,5,4,5,6,4,5,6
+10,Nick Kolb,played,37,-3,34,4,4,4,4,4,5,3,4,5
+10,Will Adjorlolo,played,45,-8,37,5,4,4,4,7,7,4,4,6
+10,Jarrod Casey,played,44,-7,37,4,5,4,4,5,7,4,6,5
+10,Adam Chisholm,DNP,DNP,-9,DNP,,,,,,,,,
+10,Mark Edinger,played,47,-6,41,5,5,4,4,6,7,4,5,7
+10,Connor Sullivan,DNP,DNP,-8,DNP,,,,,,,,,
+10,Matt Mackin & Sam Cerrato,played,53,-14,39,4,6,7,4,6,6,5,8,7
+10,Lateef Taylor,played,53,-13,40,8,5,6,6,4,6,4,6,8
+10,Rob Anderson,DNP,DNP,-8,DNP,,,,,,,,,
+10,Korey Cohan & Conor Purvis,played,43,-6,37,4,4,4,5,6,6,5,4,5
+11,Nick Kolb,played,39,-3,36,5,5,3,4,5,5,3,4,5
+11,Will Adjorlolo,played,45,-7,38,6,4,3,6,4,6,3,4,9
+11,Jarrod Casey,DNP,DNP,-7,DNP,,,,,,,,,
+11,Adam Chisholm,DNP,DNP,-9,DNP,,,,,,,,,
+11,Mark Edinger,played,43,-6,37,4,7,3,5,4,5,4,4,7
+11,Connor Sullivan,played,45,-9,36,5,7,3,4,5,7,3,6,5
+11,Matt Mackin & Sam Cerrato,played,38,2,40,4,4,3,4,4,5,3,4,7
+11,Lateef Taylor,DNP,DNP,-13,DNP,,,,,,,,,
+11,Rob Anderson,played,44,-8,36,5,4,3,5,6,7,3,4,7
+11,Korey Cohan & Conor Purvis,played,44,-7,37,4,4,3,5,5,6,7,5,5
+12,Nick Kolb,played,39,-3,36,4,5,3,5,4,5,4,4,5
+12,Will Adjorlolo,played,44,-8,36,4,6,4,6,5,6,4,4,5
+12,Jarrod Casey,played,45,-7,38,7,5,3,5,6,5,3,4,7
+12,Adam Chisholm,DNP,DNP,-9,DNP,,,,,,,,,
+12,Mark Edinger,played,45,-6,39,4,4,4,6,4,5,3,7,8
+12,Connor Sullivan,DNP,DNP,-9,DNP,,,,,,,,,
+12,Matt Mackin & Sam Cerrato,played,53,-14,39,6,5,4,7,5,7,3,7,9
+12,Lateef Taylor,played,54,-13,41,4,7,5,6,8,7,5,6,6
+12,Rob Anderson,played,45,-8,37,4,5,6,5,5,7,3,5,5
+12,Korey Cohan & Conor Purvis,played,45,-6,39,6,4,4,6,4,5,4,4,8
+13,Nick Kolb,played,42,-3,39,5,5,3,6,5,5,4,4,5
+13,Will Adjorlolo,played,46,-7,39,6,5,5,6,5,6,3,5,5
+13,Jarrod Casey,DNP,DNP,-7,DNP,,,,,,,,,
+13,Adam Chisholm,played,43,-9,34,4,5,4,5,6,5,4,4,6
+13,Mark Edinger,played,43,-5,38,4,6,3,5,5,8,3,4,5
+13,Connor Sullivan,played,49,-9,40,5,7,4,5,4,8,4,6,6
+13,Matt Mackin & Sam Cerrato,played,34,2,36,4,4,3,4,4,4,3,4,4
+13,Lateef Taylor,played,55,-13,42,5,8,4,6,8,5,5,5,9
+13,Rob Anderson,played,52,-7,45,5,6,4,6,6,7,4,5,9
+13,Korey Cohan & Conor Purvis,played,45,-7,38,5,4,6,6,7,5,3,4,5
+14,Nick Kolb,DNP,DNP,-5,DNP,,,,,,,,,
+14,Will Adjorlolo,played,44,-7,37,5,5,3,5,4,6,5,5,6
+14,Jarrod Casey,DNP,DNP,-7,DNP,,,,,,,,,
+14,Adam Chisholm,DNP,DNP,-9,DNP,,,,,,,,,
+14,Mark Edinger,played,38,-6,32,4,5,3,4,4,6,3,4,5
+14,Connor Sullivan,DNP,DNP,-9,DNP,,,,,,,,,
+14,Matt Mackin & Sam Cerrato,played,43,-14,29,4,4,3,4,5,8,4,4,7
+14,Lateef Taylor,DNP,DNP,-13,DNP,,,,,,,,,
+14,Rob Anderson,played,46,-10,36,7,8,3,5,5,5,3,5,5
+14,Korey Cohan & Conor Purvis,played,39,-7,32,4,4,4,4,4,5,3,5,6
+15,Nick Kolb,played,38,-5,33,4,5,3,4,5,5,3,4,5
+15,Will Adjorlolo,played,49,-7,42,5,6,4,6,7,5,4,6,6
+15,Jarrod Casey,played,45,-6,39,4,5,3,6,4,7,3,6,7
+15,Adam Chisholm,played,41,-9,32,5,5,4,4,4,7,3,4,5
+15,Mark Edinger,played,39,-5,34,4,4,4,5,4,5,3,4,6
+15,Connor Sullivan,played,41,-9,32,4,5,3,4,4,7,3,4,7
+15,Matt Mackin & Sam Cerrato,DNP,DNP,-14,DNP,,,,,,,,,
+15,Lateef Taylor,DNP,DNP,-13,DNP,,,,,,,,,
+15,Rob Anderson,played,48,-10,38,6,5,4,5,5,5,5,7,6
+15,Korey Cohan & Conor Purvis,played,43,-7,36,5,5,3,5,4,6,3,5,7
