@@ -23,16 +23,12 @@ type Player = {
   full_name: string;
 };
 
-type ParticipationRecord = {
+type TeeAssignmentRecord = {
   player_id: string;
-};
-
-type WeeklyTeeTimeRecord = {
-  player_id: string;
+  player_name: string;
   tee_time: string;
-  group_number: number;
+  group_number: number | null;
   position_in_group: number | null;
-  notes: string | null;
 };
 
 type Row = {
@@ -143,74 +139,50 @@ export default function PublicTeeSheetPage() {
 
     setLoadingRows(true);
     setError(null);
-    const supabase = createClient();
 
-    Promise.all([
-      supabase
-        .from("weekly_participation")
-        .select("player_id")
-        .eq("league_week_id", selectedWeekId)
-        .eq("playing_this_week", true),
-      supabase
-        .from("weekly_tee_times")
-        .select("player_id, tee_time, group_number, position_in_group, notes")
-        .eq("week_id", selectedWeekId),
-    ]).then(([partRes, teeTimesRes]) => {
-      if (partRes.error) {
-        setError(partRes.error.message);
-        setRows([]);
-        setLoadingRows(false);
-        return;
-      }
+    fetch(`/api/weeks/${selectedWeekId}/tee-assignments`, { cache: "no-store" })
+      .then(async (response) => {
+        const body = (await response.json().catch(() => null)) as
+          | {
+              error?: string;
+              assignments?: TeeAssignmentRecord[];
+            }
+          | null;
 
-      if (teeTimesRes.error) {
-        setError(teeTimesRes.error.message);
-        setRows([]);
-        setLoadingRows(false);
-        return;
-      }
+        if (!response.ok) {
+          throw new Error(body?.error ?? "Failed to load tee assignments.");
+        }
 
-      const participation = (partRes.data as ParticipationRecord[]) ?? [];
-      const teeTimes = (teeTimesRes.data as WeeklyTeeTimeRecord[]) ?? [];
-      const activePlayerIds = Array.from(new Set(participation.map((record) => record.player_id)));
-
-      if (activePlayerIds.length === 0) {
-        setRows([]);
-        setLoadingRows(false);
-        return;
-      }
-
-      supabase
-        .from("players")
-        .select("id, full_name")
-        .in("id", activePlayerIds)
-        .order("full_name")
-        .then(({ data: playersData, error: playersErr }) => {
-          if (playersErr) {
-            setError(playersErr.message);
-            setRows([]);
-            setLoadingRows(false);
-            return;
-          }
-
-          const players = (playersData as Player[]) ?? [];
-          const teeByPlayerId = new Map(teeTimes.map((record) => [record.player_id, record]));
-
-          const merged = players.map((player) => {
-            const tee = teeByPlayerId.get(player.id);
-            return {
-              player,
-              teeTime: tee ? normalizeTeeTimeValue(tee.tee_time) : "",
-              groupNumber: tee ? String(tee.group_number) : "1",
-              positionInGroup: tee?.position_in_group != null ? String(tee.position_in_group) : "",
-              notes: tee?.notes ?? "",
-            };
-          });
-
-          setRows(merged);
+        return body?.assignments ?? [];
+      })
+      .then((assignments) => {
+        if (assignments.length === 0) {
+          setRows([]);
           setLoadingRows(false);
-        });
-    });
+          return;
+        }
+
+        const merged = assignments.map((assignment) => ({
+          player: {
+            id: assignment.player_id,
+            full_name: assignment.player_name,
+          } as Player,
+          teeTime: normalizeTeeTimeValue(assignment.tee_time),
+          groupNumber: assignment.group_number != null ? String(assignment.group_number) : "",
+          positionInGroup:
+            assignment.position_in_group != null ? String(assignment.position_in_group) : "",
+          notes: "",
+        }));
+
+        setRows(merged);
+        setLoadingRows(false);
+      })
+      .catch((fetchError: unknown) => {
+        const message = fetchError instanceof Error ? fetchError.message : "Failed to load tee sheet.";
+        setError(message);
+        setRows([]);
+        setLoadingRows(false);
+      });
   }, [selectedWeekId]);
 
   useEffect(() => {

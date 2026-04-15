@@ -69,5 +69,28 @@ export async function GET(
       | null) ?? []
     ).filter((row) => activePlayerIds.has(row.player_id));
 
-  return NextResponse.json({ assignments });
+  const visiblePlayerIds = Array.from(activePlayerIds);
+  const playerNamesById = new Map<string, string>();
+
+  if (visiblePlayerIds.length > 0) {
+    const playersRes = await serviceSupabase
+      .from("players")
+      .select("id, full_name")
+      .in("id", visiblePlayerIds);
+
+    if (playersRes.error) {
+      return NextResponse.json({ error: playersRes.error.message }, { status: 500 });
+    }
+
+    (((playersRes.data as { id: string; full_name: string }[] | null) ?? [])).forEach((player) => {
+      playerNamesById.set(player.id, player.full_name);
+    });
+  }
+
+  return NextResponse.json({
+    assignments: assignments.map((row) => ({
+      ...row,
+      player_name: playerNamesById.get(row.player_id) ?? "",
+    })),
+  });
 }

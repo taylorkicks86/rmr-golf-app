@@ -87,7 +87,7 @@ export function computeCupSeasonStandings({
     )
     .forEach((row) => {
       const existing = pointsByPlayer.get(row.player_id) ?? [];
-      existing.push(Number(row.points_earned));
+      existing.push(Math.round(Number(row.points_earned)));
       pointsByPlayer.set(row.player_id, existing);
     });
 

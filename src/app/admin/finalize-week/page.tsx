@@ -923,7 +923,7 @@ export default function AdminFinalizeWeekPage() {
           gross_score: row.gross_score,
           net_score: row.net_score,
           finish_position: row.finish_position,
-          points_earned: row.points_earned,
+          points_earned: Math.round(Number(row.points_earned ?? 0)),
         })),
         { onConflict: "league_week_id,player_id" }
       );
