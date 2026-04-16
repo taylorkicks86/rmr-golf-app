@@ -718,7 +718,7 @@ export default function AdminFinalizeWeekPage() {
                 (finishCounts.get(Number(row.finish_position)) ?? 0) > 1,
               gross: row?.gross_score ?? null,
               net: row?.net_score ?? null,
-              points: Number(row?.points_earned ?? 0),
+              points: Math.round(Number(row?.points_earned ?? 0)),
               pointsSource,
             };
           })
