@@ -199,6 +199,7 @@ export default function AdminPlayersPage() {
       },
       body: JSON.stringify({
         full_name: editForm.full_name,
+        email: editForm.email,
         ghin: editForm.ghin,
         handicap_index: parsedHandicap,
         is_admin: editForm.is_admin,
@@ -506,13 +507,14 @@ export default function AdminPlayersPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700">Email (read-only)</label>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Email</label>
                 <input
                   type="email"
                   value={editForm.email}
-                  readOnly
-                  disabled
-                  className="w-full rounded-md border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm text-zinc-600"
+                  onChange={(event) =>
+                    setEditForm((prev) => (prev ? { ...prev, email: event.target.value } : prev))
+                  }
+                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
 

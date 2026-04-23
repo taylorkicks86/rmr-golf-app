@@ -63,6 +63,17 @@ function parseHandicap(value: number | string | undefined): number | null {
   return null;
 }
 
+function normalizeEmail(value: string | undefined, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback.trim().toLowerCase();
+  }
+  return value.trim().toLowerCase();
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 async function getActiveSeasonId(serviceSupabase: any) {
   const { data: season, error } = await serviceSupabase
     .from("seasons")
@@ -95,10 +106,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  if (typeof body.email === "string") {
-    return NextResponse.json({ error: "Email cannot be edited from this screen." }, { status: 400 });
-  }
-
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
     return NextResponse.json(
@@ -115,7 +122,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const { data: existingPlayer, error: existingPlayerError } = await serviceSupabase
     .from("players")
-    .select("id, full_name, ghin, handicap_index, is_admin, is_approved, cup")
+    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
     .eq("id", targetPlayerId)
     .maybeSingle();
 
@@ -129,6 +136,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const fullName =
     typeof body.full_name === "string" ? body.full_name.trim() : String(existingPlayer.full_name ?? "").trim();
+  const email = normalizeEmail(body.email, String(existingPlayer.email ?? ""));
   const ghin = typeof body.ghin === "string" ? body.ghin.trim() : String(existingPlayer.ghin ?? "").trim();
   const handicap = parseHandicap(body.handicap_index ?? body.handicap ?? Number(existingPlayer.handicap_index));
   const nextIsAdmin = typeof body.is_admin === "boolean" ? body.is_admin : Boolean(existingPlayer.is_admin);
@@ -151,6 +159,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "Full name is required." }, { status: 400 });
   }
 
+  if (!email) {
+    return NextResponse.json({ error: "Email is required." }, { status: 400 });
+  }
+
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: "Email must be a valid email address." }, { status: 400 });
+  }
+
   if (!ghin) {
     return NextResponse.json({ error: "GHIN is required." }, { status: 400 });
   }
@@ -163,10 +179,32 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: "You cannot remove your own admin access." }, { status: 400 });
   }
 
+  const authUserId = (existingPlayer as { auth_user_id?: string | null }).auth_user_id ?? null;
+  const previousEmail = String(existingPlayer.email ?? "").trim().toLowerCase();
+  const emailChanged = email !== previousEmail;
+  let authEmailSynced = false;
+
+  if (emailChanged && authUserId) {
+    const { error: authUpdateError } = await serviceSupabase.auth.admin.updateUserById(authUserId, {
+      email,
+      email_confirm: true,
+    });
+
+    if (authUpdateError) {
+      return NextResponse.json(
+        { error: `Failed to update linked auth email: ${authUpdateError.message}` },
+        { status: 500 }
+      );
+    }
+
+    authEmailSynced = true;
+  }
+
   const { data: updatedPlayer, error: updateError } = await serviceSupabase
     .from("players")
     .update({
       full_name: fullName,
+      email,
       ghin,
       handicap_index: Number(handicap.toFixed(1)),
       is_admin: nextIsAdmin,
@@ -178,6 +216,22 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .single();
 
   if (updateError) {
+    if (authEmailSynced && authUserId) {
+      const { error: rollbackAuthError } = await serviceSupabase.auth.admin.updateUserById(authUserId, {
+        email: previousEmail,
+        email_confirm: true,
+      });
+
+      if (rollbackAuthError) {
+        return NextResponse.json(
+          {
+            error: `Player email update failed after auth email changed. Auth rollback also failed: ${rollbackAuthError.message}`,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
@@ -358,7 +412,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       cup_team_id: cupTeamId,
       cup_team_name: cupTeamName,
     },
-    message: "Player updated.",
+    message:
+      emailChanged && !authUserId
+        ? "Player updated. No linked auth user was found, so only the players table email was changed."
+        : "Player updated.",
   });
 }
 
