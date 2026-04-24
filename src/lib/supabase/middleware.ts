@@ -36,6 +36,7 @@ export async function updateSession(request: NextRequest) {
   const isAuthCallbackRoute = pathname.startsWith("/auth/callback");
   const isAuthConfirmRoute = pathname.startsWith("/auth/confirm");
   const isUpdatePasswordRoute = pathname === "/update-password";
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isPublicRoute =
     isLoginRoute || isSignupRoute || isAuthCallbackRoute || isAuthConfirmRoute || isUpdatePasswordRoute;
 
@@ -81,6 +82,7 @@ export async function updateSession(request: NextRequest) {
   const canAccessApp = hasPlayerProfile
     ? Boolean(playerResolution.player.is_admin || playerResolution.player.is_approved)
     : false;
+  const isAdminUser = hasPlayerProfile ? playerResolution.player.is_admin === true : false;
 
   if (!hasPlayerProfile) {
     if (isSignupRoute) {
@@ -96,6 +98,13 @@ export async function updateSession(request: NextRequest) {
   if (!canAccessApp && !isPendingApprovalRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/pending-approval";
+    redirectUrl.search = "";
+    return createRedirectResponse(redirectUrl);
+  }
+
+  if (isAdminRoute && !isAdminUser) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/";
     redirectUrl.search = "";
     return createRedirectResponse(redirectUrl);
   }
