@@ -82,7 +82,7 @@ export function AppHeader() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 pt-[env(safe-area-inset-top)] border-b border-emerald-950/45 bg-[#0f3b2e] shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
+      <header className="sticky top-0 z-50 pt-[env(safe-area-inset-top)] border-b border-emerald-950/45 bg-[#1d392f] shadow-[0_2px_8px_rgba(0,0,0,0.18)]">
         <div className="mx-auto flex h-14 w-full max-w-[90rem] items-center justify-between px-3.5 sm:px-4">
         <Link href="/" className="inline-flex items-center pl-0.5" aria-label="RMR Golf League home">
           <Image
@@ -120,7 +120,7 @@ export function AppHeader() {
             className="absolute inset-0 bg-black/45 backdrop-blur-[1px]"
             onClick={() => setMenuOpen(false)}
           />
-          <aside className="absolute right-0 top-0 h-full w-[86%] max-w-sm border-l border-emerald-800/80 bg-[#0f3b2e] p-4">
+          <aside className="absolute right-0 top-0 h-full w-[86%] max-w-sm border-l border-emerald-800/80 bg-[#1d392f] p-4">
             <div className="mb-4 flex items-center justify-between">
               <span className="text-sm font-semibold uppercase tracking-wide text-white">Menu</span>
               <button

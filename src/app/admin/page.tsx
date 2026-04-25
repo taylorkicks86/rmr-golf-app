@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function AdminPage() {
   return (
     <div className="mx-4 pb-20 md:mx-auto md:max-w-4xl">
-      <div className="bg-[#0f3b2e] px-4 py-8">
+      <div className="bg-[#1d392f] px-4 py-8">
         <nav className="flex flex-col gap-2">
           <Link
             href="/admin/players"

@@ -390,7 +390,7 @@ export default function LeaderboardPage() {
         </div>
 
         <div className="overflow-hidden rounded-md border border-emerald-900/20 bg-[#f8f7f2] shadow-md">
-          <div className="border-b border-emerald-950/35 bg-[#0f3b2e] px-3 py-2 text-white">
+          <div className="border-b border-emerald-950/35 bg-[#1d392f] px-3 py-2 text-white">
             <h2 className="text-sm font-semibold tracking-wide text-white sm:text-base">{leaderboardTitle}</h2>
           </div>
           <table className="w-full table-fixed divide-y divide-zinc-200">

@@ -1050,7 +1050,7 @@ export function GroupedScoreEntryPage({
         key={section.key}
         className="overflow-x-auto rounded-lg border border-emerald-900/25 bg-[#f8f7f2] shadow-sm"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-emerald-950/35 bg-[#0f3b2e] px-3 py-2 text-white">
+        <div className="flex items-center justify-between gap-3 border-b border-emerald-950/35 bg-[#1d392f] px-3 py-2 text-white">
           <div>
             <p className="text-sm font-semibold tracking-wide text-white">{section.label}</p>
             <p className="text-xs text-emerald-100">

@@ -242,7 +242,7 @@ export default function PublicTeeSheetPage() {
     [rows]
   );
   const cardClass = "overflow-hidden rounded-md border border-emerald-900/20 bg-[#f8f7f2] shadow-md";
-  const cardHeaderClass = "border-b border-emerald-950/35 bg-[#0f3b2e] px-3 py-2 text-white";
+  const cardHeaderClass = "border-b border-emerald-950/35 bg-[#1d392f] px-3 py-2 text-white";
   const cardBodyClass = "p-4 sm:p-5";
 
   if (loadingWeeks) {

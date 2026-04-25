@@ -21,7 +21,7 @@ export function MobileNav() {
   };
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-emerald-950/40 bg-[#0f3b2e] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-2px_12px_rgba(0,0,0,0.3)] md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-emerald-950/40 bg-[#1d392f] px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-2px_12px_rgba(0,0,0,0.3)] md:hidden">
       <ul className="mx-auto grid w-full max-w-md grid-cols-4 gap-1">
         {navLinks.map((link) => {
           const active = isActive(link.href);

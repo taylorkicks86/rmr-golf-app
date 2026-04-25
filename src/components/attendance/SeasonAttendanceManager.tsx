@@ -112,7 +112,7 @@ export function SeasonAttendanceManager({ initialWeeks, isCupPlayer }: SeasonAtt
 
   return (
     <div className="overflow-hidden rounded-md border border-emerald-900/20 bg-[#f8f7f2] shadow-md">
-      <div className="border-b border-emerald-950/35 bg-[#0f3b2e] px-5 py-4 text-white">
+      <div className="border-b border-emerald-950/35 bg-[#1d392f] px-5 py-4 text-white">
         <div className="flex items-center justify-between gap-2">
           <div>
             <h3 className="text-base font-semibold">Attendance</h3>
