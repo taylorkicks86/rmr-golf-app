@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { resolvePlayerProfileForUser } from "@/lib/player-profile";
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
+  const supabaseResponse = NextResponse.next({
     request,
   });
 
@@ -57,6 +57,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (!user) {
+    return supabaseResponse;
+  }
+
+  if (isUpdatePasswordRoute) {
     return supabaseResponse;
   }
 

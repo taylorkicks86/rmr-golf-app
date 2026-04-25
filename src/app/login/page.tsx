@@ -14,17 +14,21 @@ export default function LoginPage() {
   const [sendingReset, setSendingReset] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(createClient);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("reset") === "success") {
-      setMessage({ type: "success", text: "Password updated. You can now sign in." });
-      return;
-    }
-    if (params.get("error") === "auth") {
-      setMessage({ type: "error", text: "Authentication link is invalid or expired. Please try again." });
-    }
+    const timeoutId = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("reset") === "success") {
+        setMessage({ type: "success", text: "Password updated. You can now sign in." });
+        return;
+      }
+      if (params.get("error") === "auth") {
+        setMessage({ type: "error", text: "Authentication link is invalid or expired. Please try again." });
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -58,7 +62,7 @@ export default function LoginPage() {
     }
 
     setSendingReset(true);
-    const redirectTo = `${window.location.origin}/auth/confirm`;
+    const redirectTo = `${window.location.origin}/update-password`;
     const { error } = await supabase.auth.resetPasswordForEmail(emailToReset, { redirectTo });
 
     if (error) {

@@ -18,7 +18,7 @@ export default function UpdatePasswordPage() {
   const [canReset, setCanReset] = useState(false);
   const [message, setMessage] = useState<StatusMessage | null>(null);
   const router = useRouter();
-  const supabase = createClient();
+  const [supabase] = useState(createClient);
 
   useEffect(() => {
     let mounted = true;
@@ -29,11 +29,29 @@ export default function UpdatePasswordPage() {
       const code = searchParams.get("code");
       const accessToken = hashParams.get("access_token");
       const refreshToken = hashParams.get("refresh_token");
+      const linkError = searchParams.get("error_description") ?? hashParams.get("error_description");
+
+      if (linkError) {
+        if (mounted) {
+          setCanReset(false);
+          setMessage({ type: "error", text: decodeURIComponent(linkError.replace(/\+/g, " ")) });
+          setInitializing(false);
+        }
+        return;
+      }
 
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error && mounted) {
-          setMessage({ type: "error", text: "Reset link is invalid or expired. Request a new one." });
+        if (error) {
+          if (mounted) {
+            setCanReset(false);
+            setMessage({ type: "error", text: "Reset link is invalid or expired. Request a new one." });
+            setInitializing(false);
+          }
+          return;
+        }
+        if (mounted) {
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
       }
 
@@ -42,8 +60,13 @@ export default function UpdatePasswordPage() {
           access_token: accessToken,
           refresh_token: refreshToken,
         });
-        if (error && mounted) {
-          setMessage({ type: "error", text: "Reset link is invalid or expired. Request a new one." });
+        if (error) {
+          if (mounted) {
+            setCanReset(false);
+            setMessage({ type: "error", text: "Reset link is invalid or expired. Request a new one." });
+            setInitializing(false);
+          }
+          return;
         }
         if (window.location.hash) {
           window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
