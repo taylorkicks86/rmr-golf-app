@@ -81,6 +81,19 @@ type Row = {
   scorecardSignedAt: string | null;
 };
 
+type MemberScoreEntryPayload = {
+  currentPlayerId: string | null;
+  currentPlayerIsAdmin: boolean;
+  weeks: LeagueWeek[];
+  selectedWeekId: string;
+  rows: Row[];
+  teeAssignments: TeeAssignmentRecord[];
+  activeHoles: ActiveHole[];
+  activePlayerCount: number;
+  holeScoreRowCount: number;
+  error?: string;
+};
+
 type GroupSection = {
   key: string;
   label: string;
@@ -229,7 +242,45 @@ export function GroupedScoreEntryPage({
   const [teeAssignments, setTeeAssignments] = useState<TeeAssignmentRecord[]>([]);
   const [activeHoles, setActiveHoles] = useState<ActiveHole[]>(DEFAULT_ACTIVE_HOLES);
 
+  const applyMemberScoreEntryPayload = useCallback((payload: MemberScoreEntryPayload) => {
+    setCurrentPlayerId(payload.currentPlayerId);
+    setCurrentPlayerIsAdmin(payload.currentPlayerIsAdmin);
+    setWeeks(payload.weeks);
+    setSelectedWeekId(payload.selectedWeekId);
+    setRows(payload.rows);
+    setTeeAssignments(payload.teeAssignments);
+    setActiveHoles(payload.activeHoles.length === 9 ? payload.activeHoles : DEFAULT_ACTIVE_HOLES);
+    setActivePlayerCount(payload.activePlayerCount);
+    setHoleScoreRowCount(payload.holeScoreRowCount);
+    setDirty(false);
+  }, []);
+
   useEffect(() => {
+    if (!requireAdmin) {
+      setLoadingWeeks(true);
+      setError(null);
+      fetch("/api/score-entry/member", { cache: "no-store" })
+        .then(async (response) => {
+          const body = (await response.json().catch(() => null)) as MemberScoreEntryPayload | { error?: string } | null;
+          if (!response.ok) {
+            throw new Error(body?.error ?? "Failed to load scoring weeks.");
+          }
+          applyMemberScoreEntryPayload(body as MemberScoreEntryPayload);
+          setLoadingWeeks(false);
+          setLoadingRows(false);
+        })
+        .catch((loadError: unknown) => {
+          const message = loadError instanceof Error ? loadError.message : "Failed to load scoring weeks.";
+          setError(message);
+          setWeeks([]);
+          setRows([]);
+          setTeeAssignments([]);
+          setLoadingWeeks(false);
+          setLoadingRows(false);
+        });
+      return;
+    }
+
     const supabase = createClient();
     supabase.auth.getUser().then(({ data, error: authErr }) => {
       if (authErr) {
@@ -266,12 +317,14 @@ export function GroupedScoreEntryPage({
       });
     });
 
-    supabase
-      .from("seasons")
-      .select("id, name, year, is_active")
-      .order("is_active", { ascending: false })
-      .order("year", { ascending: false })
-      .order("start_date", { ascending: false })
+    Promise.resolve(
+      supabase
+        .from("seasons")
+        .select("id, name, year, is_active")
+        .order("is_active", { ascending: false })
+        .order("year", { ascending: false })
+        .order("start_date", { ascending: false })
+    )
       .then(({ data: seasonData, error: seasonErr }) => {
         if (seasonErr) {
           setError(seasonErr.message);
@@ -294,7 +347,7 @@ export function GroupedScoreEntryPage({
           return;
         }
 
-        supabase
+        return supabase
           .from("league_weeks")
           .select("id, week_number, week_date, is_finalized")
           .eq("season_id", initialSeasonId)
@@ -319,8 +372,14 @@ export function GroupedScoreEntryPage({
             }
             setLoadingWeeks(false);
           });
+      })
+      .catch((loadError: unknown) => {
+        const message = loadError instanceof Error ? loadError.message : "Failed to load scoring weeks.";
+        setError(message);
+        setWeeks([]);
+        setLoadingWeeks(false);
       });
-  }, [requireAdmin]);
+  }, [applyMemberScoreEntryPayload, requireAdmin]);
 
   useEffect(() => {
     if (!requireAdmin) {
@@ -379,6 +438,27 @@ export function GroupedScoreEntryPage({
     setError(null);
     setActivePlayerCount(0);
     setHoleScoreRowCount(0);
+
+    if (!requireAdmin) {
+      fetch(`/api/score-entry/member?weekId=${encodeURIComponent(selectedWeekId)}`, { cache: "no-store" })
+        .then(async (response) => {
+          const body = (await response.json().catch(() => null)) as MemberScoreEntryPayload | { error?: string } | null;
+          if (!response.ok) {
+            throw new Error(body?.error ?? "Failed to load scoring data.");
+          }
+          applyMemberScoreEntryPayload(body as MemberScoreEntryPayload);
+          setLoadingRows(false);
+        })
+        .catch((loadError: unknown) => {
+          const message = loadError instanceof Error ? loadError.message : "Failed to load scoring data.";
+          setError(message);
+          setRows([]);
+          setTeeAssignments([]);
+          setLoadingRows(false);
+        });
+      return;
+    }
+
     const supabase = createClient();
 
     Promise.all([
@@ -496,7 +576,7 @@ export function GroupedScoreEntryPage({
         return;
       }
 
-      Promise.all([
+      return Promise.all([
         supabase
           .from("players")
           .select("id, full_name, handicap_index")
@@ -572,8 +652,14 @@ export function GroupedScoreEntryPage({
           setDirty(false);
           setLoadingRows(false);
         });
+    }).catch((loadError: unknown) => {
+      const message = loadError instanceof Error ? loadError.message : "Failed to load scoring data.";
+      setError(message);
+      setRows([]);
+      setTeeAssignments([]);
+      setLoadingRows(false);
     });
-  }, [selectedWeekId]);
+  }, [applyMemberScoreEntryPayload, requireAdmin, selectedWeekId]);
 
   useEffect(() => {
     loadData();
@@ -680,6 +766,11 @@ export function GroupedScoreEntryPage({
     return containingSection?.key ?? null;
   }, [groupedSections, currentPlayerId]);
 
+  const currentPlayerIsPlayingThisWeek = useMemo(
+    () => currentPlayerId != null && rows.some((row) => row.player.id === currentPlayerId),
+    [currentPlayerId, rows]
+  );
+
   const adminCanEditAllGroups = requireAdmin && currentPlayerIsAdmin === true;
 
   const editableGroupKeys = useMemo(() => {
@@ -693,13 +784,17 @@ export function GroupedScoreEntryPage({
     return new Set([currentUserGroupKey]);
   }, [adminCanEditAllGroups, groupedSections, currentUserGroupKey, isFinalized]);
 
-  const showNoAssignmentState =
+  const showReadOnlyScorecardNotice =
     !requireAdmin &&
     selectedWeekId !== "" &&
     !loadingRows &&
     rows.length > 0 &&
     currentPlayerId != null &&
-    currentUserGroupKey == null;
+    (!currentPlayerIsPlayingThisWeek || currentUserGroupKey == null);
+
+  const readOnlyScorecardMessage = !currentPlayerIsPlayingThisWeek
+    ? "You are not marked as playing this week, so score entry is read-only."
+    : "You are not assigned to a tee-time group for this week, so score entry is read-only.";
 
   const editableGroupRows = useMemo(() => {
     const rowsInEditableGroups: Row[] = [];
@@ -1410,6 +1505,12 @@ export function GroupedScoreEntryPage({
             ) : null}
           </div>
 
+          {showReadOnlyScorecardNotice && (
+            <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              {readOnlyScorecardMessage}
+            </div>
+          )}
+
           {!selectedWeekId ? (
             <div className="overflow-x-auto rounded-lg border border-zinc-200">
               <div className="px-4 py-8 text-center text-zinc-500">No week selected.</div>
@@ -1422,12 +1523,6 @@ export function GroupedScoreEntryPage({
             <div className="overflow-x-auto rounded-lg border border-zinc-200">
               <div className="px-4 py-8 text-center text-zinc-500">
                 No active players found for this week.
-              </div>
-            </div>
-          ) : showNoAssignmentState ? (
-            <div className="overflow-x-auto rounded-lg border border-zinc-200">
-              <div className="px-4 py-8 text-center text-zinc-500">
-                You are not assigned to a tee-time group for this week.
               </div>
             </div>
           ) : groupedSections.length === 0 ? (
