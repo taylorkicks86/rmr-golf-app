@@ -31,7 +31,7 @@ type CupTeamMember = {
 };
 
 type EditFormState = {
-  id: string;
+  id: string | null;
   full_name: string;
   email: string;
   ghin: string;
@@ -177,7 +177,23 @@ export default function AdminPlayersPage() {
     });
   };
 
-  const saveEdit = async () => {
+  const openCreateModal = () => {
+    setActionError(null);
+    setActionSuccess(null);
+    setEditForm({
+      id: null,
+      full_name: "",
+      email: "",
+      ghin: "",
+      handicap_index: "0",
+      is_admin: false,
+      is_approved: false,
+      cup: false,
+      cup_team_id: null,
+    });
+  };
+
+  const savePlayer = async () => {
     if (!editForm) {
       return;
     }
@@ -188,12 +204,14 @@ export default function AdminPlayersPage() {
       return;
     }
 
-    setSavingPlayerId(editForm.id);
+    const saveKey = editForm.id ?? "new-player";
+    setSavingPlayerId(saveKey);
     setActionError(null);
     setActionSuccess(null);
 
-    const response = await fetch(`/api/admin/players/${editForm.id}`, {
-      method: "PATCH",
+    const isEditing = Boolean(editForm.id);
+    const response = await fetch(isEditing ? `/api/admin/players/${editForm.id}` : "/api/admin/players", {
+      method: isEditing ? "PATCH" : "POST",
       headers: {
         "Content-Type": "application/json",
       },
@@ -236,15 +254,19 @@ export default function AdminPlayersPage() {
       ? refreshedPlayer.cup_team_name ?? cupTeams.find((team) => team.id === refreshedPlayer.cup_team_id)?.name ?? null
       : null;
     setPlayers((prev) =>
-      prev
-        .map((player) =>
-          player.id === refreshedPlayer.id
-            ? { ...refreshedPlayer, cup_team_name: teamName, cup_team_id: refreshedPlayer.cup_team_id ?? null }
-            : player
-        )
+      (isEditing
+        ? prev.map((player) =>
+            player.id === refreshedPlayer.id
+              ? { ...refreshedPlayer, cup_team_name: teamName, cup_team_id: refreshedPlayer.cup_team_id ?? null }
+              : player
+          )
+        : [
+            ...prev,
+            { ...refreshedPlayer, cup_team_name: teamName, cup_team_id: refreshedPlayer.cup_team_id ?? null },
+          ])
         .sort((a, b) => a.full_name.localeCompare(b.full_name))
     );
-    setActionSuccess(body.message ?? "Player updated.");
+    setActionSuccess(body.message ?? (isEditing ? "Player updated." : "Player created."));
     setEditForm(null);
     setSavingPlayerId(null);
     router.refresh();
@@ -268,7 +290,14 @@ export default function AdminPlayersPage() {
 
   return (
     <div className="mx-auto max-w-[90rem] px-4 py-8">
-      <div className="mb-6 flex justify-end">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={openCreateModal}
+          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+        >
+          Create Player
+        </button>
         <Link href="/admin" className="text-sm font-medium text-white hover:text-emerald-200 transition-colors">
           ← Admin
         </Link>
@@ -482,11 +511,13 @@ export default function AdminPlayersPage() {
           />
           <div className="relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-lg sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-zinc-900">Edit Player</h2>
+              <h2 className="text-lg font-semibold text-zinc-900">
+                {editForm.id ? "Edit Player" : "Create Player"}
+              </h2>
               <button
                 type="button"
                 onClick={() => setEditForm(null)}
-                disabled={savingPlayerId === editForm.id}
+                disabled={savingPlayerId === (editForm.id ?? "new-player")}
                 className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
               >
                 Close
@@ -609,18 +640,22 @@ export default function AdminPlayersPage() {
               <button
                 type="button"
                 onClick={() => setEditForm(null)}
-                disabled={savingPlayerId === editForm.id}
+                disabled={savingPlayerId === (editForm.id ?? "new-player")}
                 className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={saveEdit}
-                disabled={savingPlayerId === editForm.id}
+                onClick={savePlayer}
+                disabled={savingPlayerId === (editForm.id ?? "new-player")}
                 className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                {savingPlayerId === editForm.id ? "Saving…" : "Save Changes"}
+                {savingPlayerId === (editForm.id ?? "new-player")
+                  ? "Saving…"
+                  : editForm.id
+                    ? "Save Changes"
+                    : "Create Player"}
               </button>
             </div>
           </div>

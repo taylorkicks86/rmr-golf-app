@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "RMR Golf League",
   description: "Golf league management — leaderboards, score entry, and player profiles",
+  icons: {
+    icon: "/blank-icon.svg",
+  },
 };
 
 export default function RootLayout({
