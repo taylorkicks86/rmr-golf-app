@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import {
+  createOrFindAuthUser,
+  isValidAccountEmail,
+  isValidAccountPassword,
+  normalizeAccountEmail,
+} from "./account-utils";
 
 type CreateBody = {
   full_name?: string;
@@ -15,6 +21,21 @@ type CreateBody = {
   cup?: boolean;
   cup_player?: boolean;
   cup_team_id?: string | null;
+  create_account?: boolean;
+  password?: string;
+};
+
+type SeasonLookupQuery = {
+  select: (columns: string) => SeasonLookupQuery;
+  order: (column: string, options: { ascending: boolean }) => SeasonLookupQuery;
+  limit: (count: number) => SeasonLookupQuery;
+  maybeSingle: () => PromiseLike<{ data: { id: string } | null; error: { message: string } | null }>;
+};
+
+type SeasonLookupClient = {
+  from: (table: string) => {
+    select: (columns: string) => SeasonLookupQuery;
+  };
 };
 
 async function getAdminContext() {
@@ -54,15 +75,7 @@ function parseHandicap(value: number | string | undefined): number | null {
   return null;
 }
 
-function normalizeEmail(value: string | undefined): string {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-async function getActiveSeasonId(serviceSupabase: any) {
+async function getActiveSeasonId(serviceSupabase: SeasonLookupClient) {
   const { data: season, error } = await serviceSupabase
     .from("seasons")
     .select("id")
@@ -105,7 +118,7 @@ export async function POST(request: NextRequest) {
   );
 
   const fullName = typeof body.full_name === "string" ? body.full_name.trim() : "";
-  const email = normalizeEmail(body.email);
+  const email = normalizeAccountEmail(body.email);
   const ghin = typeof body.ghin === "string" ? body.ghin.trim() : "";
   const handicap = parseHandicap(body.handicap_index ?? body.handicap);
   const nextIsAdmin = typeof body.is_admin === "boolean" ? body.is_admin : false;
@@ -132,7 +145,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email is required." }, { status: 400 });
   }
 
-  if (!isValidEmail(email)) {
+  if (!isValidAccountEmail(email)) {
     return NextResponse.json({ error: "Email must be a valid email address." }, { status: 400 });
   }
 
@@ -144,10 +157,32 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Handicap must be a number between 0 and 54." }, { status: 400 });
   }
 
+  const shouldCreateAccount = body.create_account === true;
+  if (shouldCreateAccount && !isValidAccountPassword(body.password)) {
+    return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
+  }
+
+  let authUserId: string | null = null;
+  let createdAuthUser = false;
+  if (shouldCreateAccount) {
+    const authResult = await createOrFindAuthUser({
+      supabase: serviceSupabase,
+      email,
+      password: body.password!,
+    });
+
+    if (authResult.error || !authResult.user?.id) {
+      return NextResponse.json({ error: authResult.error ?? "Failed to create auth account." }, { status: 500 });
+    }
+
+    authUserId = authResult.user.id;
+    createdAuthUser = authResult.created;
+  }
+
   const { data: createdPlayer, error: createError } = await serviceSupabase
     .from("players")
     .insert({
-      auth_user_id: null,
+      auth_user_id: authUserId,
       full_name: fullName,
       email,
       ghin,
@@ -156,10 +191,13 @@ export async function POST(request: NextRequest) {
       is_approved: nextIsApproved,
       cup: nextCupPlayer,
     })
-    .select("id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
     .single();
 
   if (createError || !createdPlayer) {
+    if (createdAuthUser && authUserId) {
+      await serviceSupabase.auth.admin.deleteUser(authUserId);
+    }
     return NextResponse.json({ error: createError?.message ?? "Failed to create player." }, { status: 500 });
   }
 
@@ -203,7 +241,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: countError.message }, { status: 500 });
       }
 
-      if (Number(count ?? 0) >= 2) {
+      if (Number(memberCount ?? 0) >= 2) {
         return NextResponse.json(
           { error: "Cup team already has 2 members. Choose another team." },
           { status: 400 }
@@ -279,9 +317,10 @@ export async function POST(request: NextRequest) {
     success: true,
     player: {
       ...(createdPlayer as Record<string, unknown>),
+      auth_user_id: authUserId,
       cup_team_id: cupTeamId,
       cup_team_name: cupTeamName,
     },
-    message: "Player created.",
+    message: shouldCreateAccount ? "Player and account created." : "Player created.",
   });
 }

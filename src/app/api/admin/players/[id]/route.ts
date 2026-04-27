@@ -21,6 +21,19 @@ type UpdateBody = {
   email?: string;
 };
 
+type SeasonLookupQuery = {
+  select: (columns: string) => SeasonLookupQuery;
+  order: (column: string, options: { ascending: boolean }) => SeasonLookupQuery;
+  limit: (count: number) => SeasonLookupQuery;
+  maybeSingle: () => PromiseLike<{ data: { id: string } | null; error: { message: string } | null }>;
+};
+
+type SeasonLookupClient = {
+  from: (table: string) => {
+    select: (columns: string) => SeasonLookupQuery;
+  };
+};
+
 function isMissingAuthUserError(message: string): boolean {
   const lower = message.toLowerCase();
   return lower.includes("user not found") || lower.includes("no user found");
@@ -74,7 +87,7 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-async function getActiveSeasonId(serviceSupabase: any) {
+async function getActiveSeasonId(serviceSupabase: SeasonLookupClient) {
   const { data: season, error } = await serviceSupabase
     .from("seasons")
     .select("id")
@@ -212,7 +225,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       cup: nextCupPlayer,
     })
     .eq("id", targetPlayerId)
-    .select("id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
     .single();
 
   if (updateError) {

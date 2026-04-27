@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Player = {
   id: string;
+  auth_user_id: string | null;
   full_name: string;
   email: string;
   ghin: string;
@@ -39,6 +40,8 @@ type EditFormState = {
   is_admin: boolean;
   is_approved: boolean;
   cup: boolean;
+  create_account: boolean;
+  password: string;
   cup_team_id: string | null;
 };
 
@@ -52,6 +55,7 @@ export default function AdminPlayersPage() {
   const [savingPlayerId, setSavingPlayerId] = useState<string | null>(null);
   const [confirmDeletePlayerId, setConfirmDeletePlayerId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
+  const [accountForm, setAccountForm] = useState<{ player: Player; password: string } | null>(null);
   const [cupTeams, setCupTeams] = useState<CupTeam[]>([]);
   const [activeSeasonId, setActiveSeasonId] = useState<string | null>(null);
 
@@ -60,7 +64,7 @@ export default function AdminPlayersPage() {
     Promise.all([
       supabase
         .from("players")
-        .select("id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+        .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
         .order("full_name"),
       supabase
         .from("seasons")
@@ -173,6 +177,8 @@ export default function AdminPlayersPage() {
       is_admin: player.is_admin,
       is_approved: player.is_approved,
       cup: player.cup,
+      create_account: false,
+      password: "",
       cup_team_id: player.cup_team_id,
     });
   };
@@ -189,6 +195,8 @@ export default function AdminPlayersPage() {
       is_admin: false,
       is_approved: false,
       cup: false,
+      create_account: true,
+      password: "",
       cup_team_id: null,
     });
   };
@@ -201,6 +209,11 @@ export default function AdminPlayersPage() {
     const parsedHandicap = Number(editForm.handicap_index);
     if (!Number.isFinite(parsedHandicap) || parsedHandicap < 0 || parsedHandicap > 54) {
       setActionError("Handicap must be a number between 0 and 54.");
+      return;
+    }
+
+    if (!editForm.id && editForm.create_account && editForm.password.length < 6) {
+      setActionError("Password must be at least 6 characters.");
       return;
     }
 
@@ -224,6 +237,8 @@ export default function AdminPlayersPage() {
         is_approved: editForm.is_approved,
         cup: editForm.cup,
         cup_team_id: editForm.cup ? editForm.cup_team_id : null,
+        create_account: !isEditing ? editForm.create_account : undefined,
+        password: !isEditing && editForm.create_account ? editForm.password : undefined,
       }),
     });
 
@@ -268,6 +283,49 @@ export default function AdminPlayersPage() {
     );
     setActionSuccess(body.message ?? (isEditing ? "Player updated." : "Player created."));
     setEditForm(null);
+    setSavingPlayerId(null);
+    router.refresh();
+  };
+
+  const createAccountForPlayer = async () => {
+    if (!accountForm) {
+      return;
+    }
+
+    if (accountForm.password.length < 6) {
+      setActionError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSavingPlayerId(`account-${accountForm.player.id}`);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const response = await fetch(`/api/admin/players/${accountForm.player.id}/account`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password: accountForm.password }),
+    });
+
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string; message?: string; player?: Pick<Player, "id" | "auth_user_id"> }
+      | null;
+
+    if (!response.ok || !body?.player?.auth_user_id) {
+      setActionError(body?.error ?? "Failed to create account.");
+      setSavingPlayerId(null);
+      return;
+    }
+
+    setPlayers((prev) =>
+      prev.map((player) =>
+        player.id === body.player?.id ? { ...player, auth_user_id: body.player.auth_user_id } : player
+      )
+    );
+    setActionSuccess(body.message ?? "Account created.");
+    setAccountForm(null);
     setSavingPlayerId(null);
     router.refresh();
   };
@@ -326,6 +384,8 @@ export default function AdminPlayersPage() {
                   <p className="text-right font-medium text-zinc-900">{player.is_admin ? "Yes" : "No"}</p>
                   <p className="text-zinc-500">Approved</p>
                   <p className="text-right font-medium text-zinc-900">{player.is_approved ? "Yes" : "No"}</p>
+                  <p className="text-zinc-500">Account</p>
+                  <p className="text-right font-medium text-zinc-900">{player.auth_user_id ? "Linked" : "Needed"}</p>
                   <p className="text-zinc-500">Cup Player</p>
                   <p className="text-right font-medium text-zinc-900">{player.cup ? "Yes" : "No"}</p>
                   <p className="text-zinc-500">Cup Team</p>
@@ -342,6 +402,21 @@ export default function AdminPlayersPage() {
                 >
                   Edit
                 </button>
+
+                {!player.auth_user_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountForm({ player, password: "" });
+                      setActionError(null);
+                      setActionSuccess(null);
+                    }}
+                    disabled={savingPlayerId === `account-${player.id}`}
+                    className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                  >
+                    {savingPlayerId === `account-${player.id}` ? "Creating…" : "Create Account"}
+                  </button>
+                )}
 
                 {confirmDeletePlayerId === player.id ? (
                   <>
@@ -390,7 +465,7 @@ export default function AdminPlayersPage() {
 
       <div className="hidden md:block">
         <div className="w-full overflow-x-auto rounded-lg border border-zinc-200">
-        <table className="w-full min-w-[1100px] divide-y divide-zinc-200">
+        <table className="w-full min-w-[1200px] divide-y divide-zinc-200">
           <thead className="bg-zinc-50">
             <tr>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
@@ -412,6 +487,9 @@ export default function AdminPlayersPage() {
                 Approved
               </th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
+                Account
+              </th>
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
                 Cup Player
               </th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
@@ -425,7 +503,7 @@ export default function AdminPlayersPage() {
           <tbody className="divide-y divide-zinc-200 bg-white">
             {players.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={10} className="px-4 py-8 text-center text-zinc-500">
                   No players found.
                 </td>
               </tr>
@@ -438,6 +516,9 @@ export default function AdminPlayersPage() {
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.handicap_index}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.is_admin ? "Yes" : "No"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.is_approved ? "Yes" : "No"}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
+                    {player.auth_user_id ? "Linked" : "Needed"}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.cup ? "Yes" : "No"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.cup_team_name ?? "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
@@ -450,6 +531,21 @@ export default function AdminPlayersPage() {
                       >
                         Edit
                       </button>
+
+                      {!player.auth_user_id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAccountForm({ player, password: "" });
+                            setActionError(null);
+                            setActionSuccess(null);
+                          }}
+                          disabled={savingPlayerId === `account-${player.id}`}
+                          className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                        >
+                          {savingPlayerId === `account-${player.id}` ? "Creating…" : "Account"}
+                        </button>
+                      )}
 
                       {confirmDeletePlayerId === player.id ? (
                         <>
@@ -548,6 +644,36 @@ export default function AdminPlayersPage() {
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
+
+              {!editForm.id && (
+                <>
+                  <label className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2">
+                    <span className="text-sm font-medium text-zinc-700">Create Login Account</span>
+                    <input
+                      type="checkbox"
+                      checked={editForm.create_account}
+                      onChange={(event) =>
+                        setEditForm((prev) => (prev ? { ...prev, create_account: event.target.checked } : prev))
+                      }
+                      className="h-5 w-5 accent-emerald-600"
+                    />
+                  </label>
+
+                  {editForm.create_account && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-zinc-700">Password</label>
+                      <input
+                        type="password"
+                        value={editForm.password}
+                        onChange={(event) =>
+                          setEditForm((prev) => (prev ? { ...prev, password: event.target.value } : prev))
+                        }
+                        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-700">GHIN</label>
@@ -656,6 +782,77 @@ export default function AdminPlayersPage() {
                   : editForm.id
                     ? "Save Changes"
                     : "Create Player"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {accountForm && (
+        <div className="fixed inset-0 z-[90] flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <div
+            className="absolute inset-0"
+            onClick={() => {
+              if (savingPlayerId !== `account-${accountForm.player.id}`) {
+                setAccountForm(null);
+              }
+            }}
+          />
+          <div className="relative z-10 w-full rounded-t-2xl bg-white p-4 shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-zinc-900">Create Account</h2>
+                <p className="mt-1 text-sm text-zinc-600">{accountForm.player.full_name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccountForm(null)}
+                disabled={savingPlayerId === `account-${accountForm.player.id}`}
+                className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Email</label>
+                <input
+                  type="email"
+                  value={accountForm.player.email}
+                  readOnly
+                  className="w-full rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm text-zinc-700"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">Password</label>
+                <input
+                  type="password"
+                  value={accountForm.password}
+                  onChange={(event) =>
+                    setAccountForm((prev) => (prev ? { ...prev, password: event.target.value } : prev))
+                  }
+                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountForm(null)}
+                disabled={savingPlayerId === `account-${accountForm.player.id}`}
+                className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={createAccountForPlayer}
+                disabled={savingPlayerId === `account-${accountForm.player.id}`}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {savingPlayerId === `account-${accountForm.player.id}` ? "Creating…" : "Create Account"}
               </button>
             </div>
           </div>
