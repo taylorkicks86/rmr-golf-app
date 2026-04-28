@@ -26,6 +26,22 @@ type WeeklyParticipation = {
   playing_this_week: boolean | null;
 };
 
+function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
+  let displayWeekNumber = 0;
+  const displayWeekNumberById = new Map<string, number>();
+
+  for (const week of weeks) {
+    if (week.status === "cancelled") {
+      continue;
+    }
+
+    displayWeekNumber += 1;
+    displayWeekNumberById.set(week.id, displayWeekNumber);
+  }
+
+  return displayWeekNumberById;
+}
+
 function AttendancePageFrame({
   children,
   subtitle = "Manage your season attendance.",
@@ -173,16 +189,20 @@ export default async function AttendancePage() {
     );
   }
 
-  const initialWeeks = weeks.map((week) => ({
-    id: week.id,
-    weekNumber: week.week_number,
-    weekDate: week.week_date,
-    playDate: week.play_date,
-    sideToPlay: week.side_to_play,
-    isFinalized: week.is_finalized,
-    weekStatus: week.status,
-    playingThisWeek: participationByWeekId.get(week.id)?.playing_this_week ?? null,
-  }));
+  const displayWeekNumberById = buildDisplayWeekNumberById(weeks);
+  const initialWeeks = weeks
+    .filter((week) => week.status !== "cancelled")
+    .map((week) => ({
+      id: week.id,
+      weekNumber: displayWeekNumberById.get(week.id) ?? week.week_number,
+      calendarWeekNumber: week.week_number,
+      weekDate: week.week_date,
+      playDate: week.play_date,
+      sideToPlay: week.side_to_play,
+      isFinalized: week.is_finalized,
+      weekStatus: week.status,
+      playingThisWeek: participationByWeekId.get(week.id)?.playing_this_week ?? null,
+    }));
 
   return (
     <AttendancePageFrame>

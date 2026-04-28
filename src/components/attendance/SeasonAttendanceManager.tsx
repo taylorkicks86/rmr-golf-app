@@ -7,6 +7,7 @@ type AttendanceStatus = boolean | null;
 type AttendanceWeek = {
   id: string;
   weekNumber: number;
+  calendarWeekNumber: number;
   weekDate: string;
   playDate: string | null;
   sideToPlay: "front" | "back" | null;
@@ -151,6 +152,9 @@ export function SeasonAttendanceManager({ initialWeeks, isCupPlayer }: SeasonAtt
                   <p className={`font-medium ${week.isFinalized ? "text-zinc-600" : "text-zinc-900"}`}>
                     Week {week.weekNumber} • {formatWeekDate(week.playDate ?? week.weekDate)}
                   </p>
+                  {week.calendarWeekNumber !== week.weekNumber && (
+                    <p className="mt-0.5 text-[11px] text-zinc-500">Calendar week {week.calendarWeekNumber}</p>
+                  )}
                   {week.isFinalized && <p className="mt-0.5 text-[11px] text-zinc-500">Locked</p>}
                   {saveFeedback && (
                     <span className={`mt-1 block text-[11px] ${saveFeedback.type === "error" ? "text-red-600" : "text-emerald-700"}`}>

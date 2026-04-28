@@ -16,14 +16,37 @@ type LeagueWeek = {
 type AdminWeeksTableSectionProps = {
   seasonId: string;
   className?: string;
+  onWeekUpdated?: (week: LeagueWeek) => void;
 };
 
-export function AdminWeeksTableSection({ seasonId, className }: AdminWeeksTableSectionProps) {
+function shouldCountWeek(week: LeagueWeek): boolean {
+  return week.status !== "cancelled";
+}
+
+function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
+  const orderedWeeks = [...weeks].sort((a, b) => a.week_number - b.week_number);
+  let displayWeekNumber = 0;
+  const displayWeekNumberById = new Map<string, number | null>();
+
+  for (const week of orderedWeeks) {
+    if (shouldCountWeek(week)) {
+      displayWeekNumber += 1;
+      displayWeekNumberById.set(week.id, displayWeekNumber);
+    } else {
+      displayWeekNumberById.set(week.id, null);
+    }
+  }
+
+  return displayWeekNumberById;
+}
+
+export function AdminWeeksTableSection({ seasonId, className, onWeekUpdated }: AdminWeeksTableSectionProps) {
   const [weeks, setWeeks] = useState<LeagueWeek[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savingWeekId, setSavingWeekId] = useState<string | null>(null);
+  const displayWeekNumberById = buildDisplayWeekNumberById(weeks);
 
   const loadWeeks = useCallback((targetSeasonId: string) => {
     if (!targetSeasonId) {
@@ -95,6 +118,15 @@ export function AdminWeeksTableSection({ seasonId, className }: AdminWeeksTableS
           : week
       )
     );
+    const updatedWeek = weeks.find((week) => week.id === weekId);
+    if (updatedWeek) {
+      onWeekUpdated?.({
+        ...updatedWeek,
+        week_type: (data as { week_type: LeagueWeek["week_type"] }).week_type,
+        status: (data as { status: LeagueWeek["status"] }).status,
+        is_finalized: (data as { is_finalized: boolean }).is_finalized,
+      });
+    }
     setSavingWeekId(null);
   };
 
@@ -164,8 +196,16 @@ export function AdminWeeksTableSection({ seasonId, className }: AdminWeeksTableS
               weeks.map((week) => (
                 <tr key={week.id} className="transition-colors hover:bg-zinc-50">
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-900">
-                    <p className="font-medium">Week {week.week_number}</p>
+                    {displayWeekNumberById.get(week.id) == null ? (
+                      <p className="font-medium text-zinc-500">Skipped Week {week.week_number}</p>
+                    ) : (
+                      <p className="font-medium">Week {displayWeekNumberById.get(week.id)}</p>
+                    )}
                     <p className="text-xs text-zinc-600">{week.week_date}</p>
+                    {displayWeekNumberById.get(week.id) != null &&
+                      displayWeekNumberById.get(week.id) !== week.week_number && (
+                        <p className="text-xs text-zinc-500">Calendar week {week.week_number}</p>
+                      )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
                     <select

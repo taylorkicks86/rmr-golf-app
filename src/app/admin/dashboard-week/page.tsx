@@ -33,6 +33,60 @@ type CourseConfig = {
   is_default: boolean;
 };
 
+function shouldCountWeek(week: LeagueWeek): boolean {
+  return week.status !== "cancelled";
+}
+
+function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
+  const orderedWeeks = [...weeks].sort((a, b) => a.week_number - b.week_number);
+  let displayWeekNumber = 0;
+  const displayWeekNumberById = new Map<string, number | null>();
+
+  for (const week of orderedWeeks) {
+    if (shouldCountWeek(week)) {
+      displayWeekNumber += 1;
+      displayWeekNumberById.set(week.id, displayWeekNumber);
+    } else {
+      displayWeekNumberById.set(week.id, null);
+    }
+  }
+
+  return displayWeekNumberById;
+}
+
+function resolveSelectableWeekId(weeks: LeagueWeek[], preferredWeekId: string) {
+  const selectableWeeks = weeks.filter(shouldCountWeek);
+  if (selectableWeeks.length === 0) return "";
+  if (preferredWeekId && selectableWeeks.some((week) => week.id === preferredWeekId)) {
+    return preferredWeekId;
+  }
+
+  const preferredWeek = preferredWeekId ? weeks.find((week) => week.id === preferredWeekId) : null;
+  if (!preferredWeek) {
+    return selectableWeeks[0].id;
+  }
+
+  const orderedSelectableWeeks = [...selectableWeeks].sort((a, b) => a.week_number - b.week_number);
+  return (
+    orderedSelectableWeeks.find((week) => week.week_number > preferredWeek.week_number)?.id ??
+    [...orderedSelectableWeeks].reverse().find((week) => week.week_number < preferredWeek.week_number)?.id ??
+    selectableWeeks[0].id
+  );
+}
+
+function formatDashboardWeekLabel(week: LeagueWeek, displayWeekNumber: number | null | undefined) {
+  const date = week.play_date ?? week.week_date;
+  if (displayWeekNumber == null) {
+    return `Skipped Week ${week.week_number} - ${date} (${week.week_type}, ${week.status})`;
+  }
+
+  if (displayWeekNumber === week.week_number) {
+    return `Week ${week.week_number} - ${date} (${week.week_type}, ${week.status})`;
+  }
+
+  return `Week ${displayWeekNumber} - ${date} (calendar week ${week.week_number}, ${week.week_type}, ${week.status})`;
+}
+
 export default function AdminDashboardWeekPage() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [selectedSeasonId, setSelectedSeasonId] = useState("");
@@ -111,15 +165,12 @@ export default function AdminDashboardWeekPage() {
 
       const appState = (stateRes.data as { current_dashboard_week_id: string | null } | null) ?? null;
       const configuredId = appState?.current_dashboard_week_id ?? "";
-      if (configuredId && list.some((week) => week.id === configuredId)) {
-        setSelectedWeekId(configuredId);
-        const matchedWeek = list.find((week) => week.id === configuredId);
+      const resolvedWeekId = resolveSelectableWeekId(list, configuredId);
+      if (resolvedWeekId) {
+        setSelectedWeekId(resolvedWeekId);
+        const matchedWeek = list.find((week) => week.id === resolvedWeekId);
         setSelectedSideToPlay(matchedWeek?.side_to_play ?? "front");
         setSelectedCourseConfigId(matchedWeek?.course_config_id ?? defaultConfigId);
-      } else if (list.length > 0) {
-        setSelectedWeekId(list[0].id);
-        setSelectedSideToPlay(list[0].side_to_play ?? "front");
-        setSelectedCourseConfigId(list[0].course_config_id ?? defaultConfigId);
       }
 
       setLoading(false);
@@ -149,7 +200,7 @@ export default function AdminDashboardWeekPage() {
 
         const list = (data as LeagueWeek[]) ?? [];
         setWeeks(list);
-        setSelectedWeekId((prev) => (prev && list.some((week) => week.id === prev) ? prev : list[0]?.id ?? ""));
+        setSelectedWeekId((prev) => resolveSelectableWeekId(list, prev));
       });
   }, [selectedSeasonId]);
 
@@ -157,6 +208,13 @@ export default function AdminDashboardWeekPage() {
     () => weeks.find((week) => week.id === selectedWeekId) ?? null,
     [weeks, selectedWeekId]
   );
+  const displayWeekNumberById = useMemo(() => buildDisplayWeekNumberById(weeks), [weeks]);
+  const selectableWeeks = useMemo(() => weeks.filter(shouldCountWeek), [weeks]);
+
+  useEffect(() => {
+    if (!selectedWeekId || selectableWeeks.some((week) => week.id === selectedWeekId)) return;
+    setSelectedWeekId(resolveSelectableWeekId(weeks, selectedWeekId));
+  }, [selectedWeekId, selectableWeeks, weeks]);
 
   useEffect(() => {
     if (!selectedWeekId) return;
@@ -247,16 +305,17 @@ export default function AdminDashboardWeekPage() {
           onChange={(event) => setSelectedWeekId(event.target.value)}
           className="w-full max-w-sm rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
         >
-          {weeks.map((week) => (
+          {selectableWeeks.length === 0 && <option value="">No playable weeks available</option>}
+          {selectableWeeks.map((week) => (
             <option key={week.id} value={week.id}>
-              Week {week.week_number} — {week.play_date ?? week.week_date} ({week.week_type}, {week.status})
+              {formatDashboardWeekLabel(week, displayWeekNumberById.get(week.id))}
             </option>
           ))}
         </select>
 
         {selectedWeek && (
           <p className="mt-3 text-sm text-zinc-600">
-            Current selection: Week {selectedWeek.week_number} ({selectedWeek.play_date ?? selectedWeek.week_date})
+            Current selection: {formatDashboardWeekLabel(selectedWeek, displayWeekNumberById.get(selectedWeek.id))}
           </p>
         )}
         {selectedCourseConfigId && (
@@ -313,7 +372,22 @@ export default function AdminDashboardWeekPage() {
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-700">
           Weeks
         </h2>
-        <AdminWeeksTableSection seasonId={selectedSeasonId} />
+        <AdminWeeksTableSection
+          seasonId={selectedSeasonId}
+          onWeekUpdated={(updatedWeek) => {
+            setWeeks((prev) =>
+              prev.map((week) =>
+                week.id === updatedWeek.id
+                  ? {
+                      ...week,
+                      week_type: updatedWeek.week_type,
+                      status: updatedWeek.status,
+                    }
+                  : week
+              )
+            );
+          }}
+        />
       </section>
     </div>
   );
