@@ -17,11 +17,24 @@ type HoleScoreRow = {
   strokes: number;
 };
 
+type ActiveHole = {
+  hole_number: number;
+  par: number | null;
+  stroke_index: number | null;
+};
+
+type ScorecardHole = {
+  holeNumber: number;
+  par: number | null;
+  strokes: number;
+};
+
 type ScorecardModalState = {
   week: WeeklyResultRow;
   loading: boolean;
   error: string | null;
-  holes: HoleScoreRow[];
+  sideToPlay: "front" | "back" | null;
+  holes: ScorecardHole[];
   gross: number | null;
   net: number | null;
 };
@@ -39,13 +52,14 @@ export function WeeklyResultsTable({ playerId, weeklyResults }: WeeklyResultsTab
       week,
       loading: true,
       error: null,
+      sideToPlay: null,
       holes: [],
       gross: null,
       net: null,
     });
 
     const supabase = createClient();
-    const [scoreRes, holeRes, handicapRes] = await Promise.all([
+    const [scoreRes, holeRes, handicapRes, activeHolesRes] = await Promise.all([
       supabase
         .from("weekly_scores")
         .select("gross_score")
@@ -64,14 +78,41 @@ export function WeeklyResultsTable({ playerId, weeklyResults }: WeeklyResultsTab
         .eq("league_week_id", week.weekId)
         .eq("player_id", playerId)
         .maybeSingle(),
+      fetch(`/api/weeks/${week.weekId}/active-holes`, { cache: "no-store" }).then(async (response) => {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+          side_to_play?: "front" | "back";
+          holes?: ActiveHole[];
+        } | null;
+
+        if (!response.ok) {
+          return {
+            error: body?.error ?? "Unable to load scorecard hole numbers.",
+            sideToPlay: null,
+            holes: [],
+          };
+        }
+
+        return {
+          error: null,
+          sideToPlay: body?.side_to_play ?? null,
+          holes: body?.holes ?? [],
+        };
+      }),
     ]);
 
-    if (scoreRes.error || holeRes.error || handicapRes.error) {
-      const message = scoreRes.error?.message ?? holeRes.error?.message ?? handicapRes.error?.message ?? "Unable to load scorecard.";
+    if (scoreRes.error || holeRes.error || handicapRes.error || activeHolesRes.error) {
+      const message =
+        scoreRes.error?.message ??
+        holeRes.error?.message ??
+        handicapRes.error?.message ??
+        activeHolesRes.error ??
+        "Unable to load scorecard.";
       setModalState({
         week,
         loading: false,
         error: message,
+        sideToPlay: null,
         holes: [],
         gross: null,
         net: null,
@@ -79,7 +120,31 @@ export function WeeklyResultsTable({ playerId, weeklyResults }: WeeklyResultsTab
       return;
     }
 
-    const holes = ((holeRes.data as HoleScoreRow[] | null) ?? []).slice();
+    const holeScores = ((holeRes.data as HoleScoreRow[] | null) ?? []).slice();
+    const scoreByHoleNumber = new Map(
+      holeScores.map((hole) => [Number(hole.hole_number), Number(hole.strokes)])
+    );
+    const activeHoles = activeHolesRes.holes;
+    const holes =
+      activeHoles.length > 0
+        ? activeHoles.flatMap((hole, index) => {
+            const strokes =
+              scoreByHoleNumber.get(Number(hole.hole_number)) ??
+              scoreByHoleNumber.get(index + 1);
+            if (strokes == null) return [];
+            return [
+              {
+                holeNumber: Number(hole.hole_number),
+                par: hole.par,
+                strokes,
+              },
+            ];
+          })
+        : holeScores.map((hole) => ({
+            holeNumber: Number(hole.hole_number),
+            par: null,
+            strokes: Number(hole.strokes),
+          }));
     const sumFromHoles = holes.reduce((sum, hole) => sum + Number(hole.strokes), 0);
     const gross = Number(
       (scoreRes.data as { gross_score?: number } | null)?.gross_score ?? (holes.length > 0 ? sumFromHoles : week.gross)
@@ -91,6 +156,7 @@ export function WeeklyResultsTable({ playerId, weeklyResults }: WeeklyResultsTab
       week,
       loading: false,
       error: null,
+      sideToPlay: activeHolesRes.sideToPlay,
       holes,
       gross,
       net,
@@ -165,16 +231,21 @@ export function WeeklyResultsTable({ playerId, weeklyResults }: WeeklyResultsTab
               <p className="text-sm text-zinc-600">No scorecard available</p>
             ) : (
               <div className="space-y-4">
+                {modalState.sideToPlay && (
+                  <p className="text-sm font-medium text-zinc-600">
+                    {modalState.sideToPlay === "back" ? "Back 9" : "Front 9"}
+                  </p>
+                )}
                 <div className="overflow-x-auto rounded-lg border border-zinc-200">
                   <table className="min-w-full divide-y divide-zinc-200">
                     <thead className="bg-zinc-50">
                       <tr>
                         {modalState.holes.map((hole) => (
                           <th
-                            key={`h-${hole.hole_number}`}
+                            key={`h-${hole.holeNumber}`}
                             className="px-3 py-2 text-center text-xs font-medium uppercase tracking-wider text-zinc-500"
                           >
-                            {hole.hole_number}
+                            {hole.holeNumber}
                           </th>
                         ))}
                       </tr>
@@ -182,7 +253,7 @@ export function WeeklyResultsTable({ playerId, weeklyResults }: WeeklyResultsTab
                     <tbody className="bg-white">
                       <tr>
                         {modalState.holes.map((hole) => (
-                          <td key={`s-${hole.hole_number}`} className="px-3 py-2 text-center text-sm font-medium text-zinc-900">
+                          <td key={`s-${hole.holeNumber}`} className="px-3 py-2 text-center text-sm font-medium text-zinc-900">
                             {hole.strokes}
                           </td>
                         ))}
