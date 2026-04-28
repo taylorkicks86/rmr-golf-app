@@ -805,7 +805,11 @@ export default function AdminTeeSheetPage() {
       </section>
 
       <section className="mt-8">
-        <WeekControlParticipationTable selectedWeekId={selectedWeekId} isFinalized={isFinalized} />
+        <WeekControlParticipationTable
+          selectedWeekId={selectedWeekId}
+          isFinalized={isFinalized}
+          onParticipationChange={loadData}
+        />
       </section>
     </div>
   );

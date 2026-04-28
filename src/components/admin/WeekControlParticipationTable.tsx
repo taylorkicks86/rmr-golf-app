@@ -28,11 +28,13 @@ type Row = {
 type WeekControlParticipationTableProps = {
   selectedWeekId: string;
   isFinalized: boolean;
+  onParticipationChange?: () => void;
 };
 
 export function WeekControlParticipationTable({
   selectedWeekId,
   isFinalized,
+  onParticipationChange,
 }: WeekControlParticipationTableProps) {
   const [rows, setRows] = useState<Row[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);
@@ -171,12 +173,13 @@ export function WeekControlParticipationTable({
         )
       );
       setSavingPlayerId(null);
+      onParticipationChange?.();
 
       if (!row.participation) {
         loadData();
       }
     },
-    [isFinalized, loadData, selectedWeekId]
+    [isFinalized, loadData, onParticipationChange, selectedWeekId]
   );
 
   const onPlayingChange = useCallback(
@@ -195,6 +198,25 @@ export function WeekControlParticipationTable({
     },
     [isFinalized, persist]
   );
+
+  const getRsvpStatus = (playing: boolean | null) => {
+    if (playing === true) {
+      return {
+        label: "Yes",
+        className: "bg-emerald-100 text-emerald-700",
+      };
+    }
+    if (playing === false) {
+      return {
+        label: "No",
+        className: "bg-rose-100 text-rose-700",
+      };
+    }
+    return {
+      label: "Undecided",
+      className: "bg-zinc-100 text-zinc-700",
+    };
+  };
 
   return (
     <>
@@ -224,42 +246,54 @@ export function WeekControlParticipationTable({
                 scope="col"
                 className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
               >
-                Playing This Week
+                Status
               </th>
               <th
                 scope="col"
                 className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
               >
-                Cup
+                Playing
+              </th>
+              <th
+                scope="col"
+                className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
+              >
+                Cup Status
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 bg-white">
             {!selectedWeekId ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
                   Select a week.
                 </td>
               </tr>
             ) : loadingRows ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
                   No players found.
                 </td>
               </tr>
             ) : (
               rows.map((row) => {
                 const saving = savingPlayerId === row.player.id;
+                const status = getRsvpStatus(row.playing_this_week);
                 return (
                   <tr key={row.player.id} className="transition-colors hover:bg-zinc-50">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-zinc-900">
                       {row.player.full_name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-sm">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
+                        {status.label}
+                      </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <label className="flex cursor-pointer items-center gap-2">
