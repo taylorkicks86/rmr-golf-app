@@ -32,12 +32,6 @@ type Player = {
   full_name: string;
 };
 
-type PlayerHandicap = {
-  id: string;
-  full_name: string;
-  handicap_index: number;
-};
-
 type WeeklyHandicapRecord = {
   player_id: string;
   final_computed_handicap: number;
@@ -79,6 +73,7 @@ type WeeklyParticipationCupRecord = {
 type WeeklyCupScoreRecord = {
   player_id: string;
   gross_score: number;
+  is_scorecard_signed: boolean;
 };
 
 type WeeklyCupResultSnapshotRecord = {
@@ -93,7 +88,7 @@ type CupResultRow = {
   teamId: string;
   team: string;
   officialScorer: string | null;
-  status: "Scored" | "DNP";
+  status: "Signed" | "Scored" | "DNP";
   finishPosition: number | null;
   isTiedFinish: boolean;
   gross: number | null;
@@ -105,24 +100,15 @@ type CupResultRow = {
 type WeekSummary = {
   activePlayersCount: number;
   scoresEnteredCount: number;
+  signedScorecardsCount: number;
   missingScoreNames: string[];
-  activePlayerNames: string[];
 };
 
-type LeaderboardPreviewRow = {
-  full_name: string;
-  gross_score: number;
-  rank_position: number;
-};
-
-type PreviewRow = {
-  rank: number;
-  isTiedRank: boolean;
-  player: string;
-  gross: number;
-  net: number;
-  isSigned: boolean;
-};
+function getPreviewStatusClass(status: CupResultRow["status"]): string {
+  if (status === "Signed") return "bg-emerald-100 text-emerald-700";
+  if (status === "Scored") return "bg-amber-100 text-amber-800";
+  return "bg-rose-100 text-rose-700";
+}
 
 function resolveOfficialScorerByTeam(params: {
   teams: CupTeam[];
@@ -197,11 +183,8 @@ export default function AdminFinalizeWeekPage() {
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [cupError, setCupError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
   const [loadingCup, setLoadingCup] = useState(false);
   const [cupRows, setCupRows] = useState<CupResultRow[]>([]);
 
@@ -280,8 +263,6 @@ export default function AdminFinalizeWeekPage() {
   const loadSummary = useCallback(() => {
     if (!selectedWeekId) {
       setSummary(null);
-      setPreviewRows([]);
-      setPreviewError(null);
       return;
     }
 
@@ -329,17 +310,21 @@ export default function AdminFinalizeWeekPage() {
 
       const activePlayerIds = new Set(participation.map((record) => record.player_id));
       const scoredPlayerIds = new Set(scores.map((record) => record.player_id));
+      const signedPlayerIds = new Set(
+        scores.filter((record) => record.is_scorecard_signed === true).map((record) => record.player_id)
+      );
 
       const activePlayers = players.filter((player) => activePlayerIds.has(player.id));
       const missingScoreNames = activePlayers
         .filter((player) => !scoredPlayerIds.has(player.id))
         .map((player) => player.full_name);
+      const signedActivePlayersCount = activePlayers.filter((player) => signedPlayerIds.has(player.id)).length;
 
       setSummary({
         activePlayersCount: activePlayers.length,
         scoresEnteredCount: scores.length,
+        signedScorecardsCount: signedActivePlayersCount,
         missingScoreNames,
-        activePlayerNames: activePlayers.map((player) => player.full_name),
       });
       setLoadingSummary(false);
     });
@@ -348,139 +333,6 @@ export default function AdminFinalizeWeekPage() {
   useEffect(() => {
     loadSummary();
   }, [loadSummary]);
-
-  const loadPreview = useCallback(
-    (activePlayerNames: string[]) => {
-      if (!selectedWeekId) {
-        setPreviewRows([]);
-        return;
-      }
-
-      setLoadingPreview(true);
-      setPreviewError(null);
-      const supabase = createClient();
-
-      Promise.all([
-        supabase.rpc("get_weekly_leaderboard", { p_league_week_id: selectedWeekId }),
-        supabase.from("players").select("id, full_name, handicap_index"),
-        supabase
-          .from("weekly_handicaps")
-          .select("player_id, final_computed_handicap")
-          .eq("league_week_id", selectedWeekId),
-        supabase
-          .from("weekly_scores")
-          .select("player_id, is_scorecard_signed")
-          .eq("league_week_id", selectedWeekId),
-      ]).then(([leaderboardRes, playersRes, weeklyHandicapsRes, scoresRes]) => {
-        if (leaderboardRes.error) {
-          setPreviewError(leaderboardRes.error.message);
-          setPreviewRows([]);
-          setLoadingPreview(false);
-          return;
-        }
-
-        if (playersRes.error) {
-          setPreviewError(playersRes.error.message);
-          setPreviewRows([]);
-          setLoadingPreview(false);
-          return;
-        }
-        if (weeklyHandicapsRes.error) {
-          setPreviewError(weeklyHandicapsRes.error.message);
-          setPreviewRows([]);
-          setLoadingPreview(false);
-          return;
-        }
-        if (scoresRes.error) {
-          setPreviewError(scoresRes.error.message);
-          setPreviewRows([]);
-          setLoadingPreview(false);
-          return;
-        }
-
-        const leaderboard =
-          (leaderboardRes.data as LeaderboardPreviewRow[] | null) ?? [];
-        const players = (playersRes.data as PlayerHandicap[]) ?? [];
-        const weeklyHandicaps =
-          (weeklyHandicapsRes.data as WeeklyHandicapRecord[] | null) ?? [];
-        const scoreRows =
-          (scoresRes.data as { player_id: string; is_scorecard_signed: boolean }[] | null) ?? [];
-        const weeklyHandicapByPlayerId = new Map(
-          weeklyHandicaps.map((row) => [row.player_id, Number(row.final_computed_handicap)])
-        );
-        const handicapByName = new Map(
-          players.map((player) => [
-            player.full_name,
-            weeklyHandicapByPlayerId.get(player.id) ?? Number(player.handicap_index),
-          ])
-        );
-        const playerNameById = new Map(
-          players.map((player) => [player.id, player.full_name])
-        );
-        const signedByName = new Map<string, boolean>();
-        scoreRows.forEach((scoreRow) => {
-          const playerName = playerNameById.get(scoreRow.player_id);
-          if (playerName) {
-            signedByName.set(playerName, scoreRow.is_scorecard_signed === true);
-          }
-        });
-        const activeNames = new Set(activePlayerNames);
-
-        const rows: PreviewRow[] = leaderboard
-          .filter((row) => activeNames.has(row.full_name))
-          .map((row) => {
-            const handicap = handicapByName.get(row.full_name) ?? 0;
-            return {
-              rank: 0,
-              isTiedRank: false,
-              player: row.full_name,
-              gross: row.gross_score,
-              net: Number((row.gross_score - handicap).toFixed(1)),
-              isSigned: signedByName.get(row.full_name) === true,
-            };
-          })
-          .sort((a, b) => {
-            if (a.net !== b.net) return a.net - b.net;
-            return a.player.localeCompare(b.player);
-          })
-          .map((row, rowIndex, sortedRows) => {
-            const isSameNetAsPrevious = rowIndex > 0 && sortedRows[rowIndex - 1]?.net === row.net;
-            const rank = isSameNetAsPrevious ? sortedRows[rowIndex - 1]!.rank : rowIndex + 1;
-            const hasTie =
-              (rowIndex > 0 && sortedRows[rowIndex - 1]?.net === row.net) ||
-              (rowIndex < sortedRows.length - 1 && sortedRows[rowIndex + 1]?.net === row.net);
-            return {
-              ...row,
-              rank,
-              isTiedRank: hasTie,
-            };
-          });
-
-        setPreviewRows(rows);
-        setLoadingPreview(false);
-      });
-    },
-    [selectedWeekId]
-  );
-
-  useEffect(() => {
-    if (!selectedWeekId || !summary) {
-      setPreviewRows([]);
-      setPreviewError(null);
-      return;
-    }
-
-    const shouldShowPreview =
-      selectedWeek?.is_finalized === true || summary.missingScoreNames.length === 0;
-
-    if (!shouldShowPreview) {
-      setPreviewRows([]);
-      setPreviewError(null);
-      return;
-    }
-
-    loadPreview(summary.activePlayerNames);
-  }, [selectedWeekId, summary, selectedWeek?.is_finalized, loadPreview]);
 
   const loadCupResults = useCallback(() => {
     if (!selectedWeekId || !selectedWeek) {
@@ -510,7 +362,7 @@ export default function AdminFinalizeWeekPage() {
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("weekly_scores")
-        .select("player_id, gross_score")
+        .select("player_id, gross_score, is_scorecard_signed")
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("weekly_handicaps")
@@ -589,6 +441,9 @@ export default function AdminFinalizeWeekPage() {
           ...player,
           handicap_index: weeklyHandicapByPlayerId.get(player.id) ?? 0,
         }));
+        const signedByPlayerId = new Map(
+          scores.map((score) => [score.player_id, score.is_scorecard_signed === true])
+        );
         const teamByPlayerId = new Map<string, string>();
         members.forEach((member) => {
           teamByPlayerId.set(member.player_id, member.cup_team_id);
@@ -703,7 +558,11 @@ export default function AdminFinalizeWeekPage() {
               ? playerById.get(officialScorerId)?.full_name ?? null
               : null;
             const status: CupResultRow["status"] =
-              row?.finish_position != null ? "Scored" : "DNP";
+              row?.finish_position == null
+                ? "DNP"
+                : signedByPlayerId.get(row.player_id) === true
+                  ? "Signed"
+                  : "Scored";
             const pointsSource: CupResultRow["pointsSource"] =
               row?.finish_position != null ? "team finish" : "DNP vacant split";
 
@@ -1065,12 +924,6 @@ export default function AdminFinalizeWeekPage() {
         </div>
       )}
 
-      {previewError && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {previewError}
-        </div>
-      )}
-
       {cupError && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {cupError}
@@ -1106,7 +959,7 @@ export default function AdminFinalizeWeekPage() {
           <p className="text-sm text-zinc-600">Loading summary…</p>
         ) : (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 min-[440px]:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-md border border-zinc-200 p-3">
                 <p className="text-xs uppercase tracking-wide text-zinc-500">
                   Players Playing
@@ -1121,6 +974,15 @@ export default function AdminFinalizeWeekPage() {
                 </p>
                 <p className="mt-1 text-2xl font-semibold text-zinc-900">
                   {summary.scoresEnteredCount}
+                </p>
+              </div>
+              <div className="rounded-md border border-zinc-200 p-3">
+                <p className="text-xs uppercase tracking-wide text-zinc-500">
+                  Scorecards Signed
+                </p>
+                <p className="mt-1 text-2xl font-semibold text-zinc-900">
+                  {summary.signedScorecardsCount}
+                  <span className="text-base font-medium text-zinc-500">/{summary.activePlayersCount}</span>
                 </p>
               </div>
               <div className="rounded-md border border-zinc-200 p-3">
@@ -1147,170 +1009,6 @@ export default function AdminFinalizeWeekPage() {
               </div>
             </div>
 
-            {summary.missingScoreNames.length > 0 && (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                <p className="text-sm font-medium text-amber-900">
-                  Players Missing Scores
-                </p>
-                <p className="mt-2 text-sm text-amber-800">
-                  {summary.missingScoreNames.join(", ")}
-                </p>
-              </div>
-            )}
-
-            {(selectedWeek?.is_finalized ||
-              summary.missingScoreNames.length === 0) && (
-              <div className="space-y-3">
-                <div className="space-y-3 md:hidden">
-                  {loadingPreview ? (
-                    <div className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-500">
-                      Loading preview…
-                    </div>
-                  ) : previewRows.length === 0 ? (
-                    <div className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-500">
-                      No preview rows available yet.
-                    </div>
-                  ) : (
-                    previewRows.map((row) => (
-                      <article
-                        key={`${row.rank}-${row.player}`}
-                        className="rounded-lg border border-zinc-200 p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="text-base font-semibold text-zinc-900">
-                            {row.player}
-                          </h3>
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <span className="inline-flex rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700">
-                              Rank {row.isTiedRank ? `T${row.rank}` : row.rank}
-                            </span>
-                            <span
-                              className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                                row.isSigned
-                                  ? "bg-emerald-100 text-emerald-700"
-                                  : "bg-rose-100 text-rose-700"
-                              }`}
-                            >
-                              {row.isSigned ? "Signed" : "Unsigned"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                          <div className="rounded-md bg-zinc-50 px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                              Gross
-                            </p>
-                            <p className="mt-0.5 font-medium text-zinc-900">
-                              {row.gross}
-                            </p>
-                          </div>
-                          <div className="rounded-md bg-zinc-50 px-3 py-2">
-                            <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                              Net
-                            </p>
-                            <p className="mt-0.5 font-medium text-zinc-900">
-                              {row.net}
-                            </p>
-                          </div>
-                        </div>
-                      </article>
-                    ))
-                  )}
-                </div>
-
-                <div className="hidden overflow-hidden rounded-lg border border-zinc-200 md:block">
-                  <table className="min-w-full divide-y divide-zinc-200">
-                    <thead className="bg-zinc-50">
-                      <tr>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
-                        >
-                          Rank
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
-                        >
-                          Player
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
-                        >
-                          Gross
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
-                        >
-                          Net
-                        </th>
-                        <th
-                          scope="col"
-                          className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500"
-                        >
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-200 bg-white">
-                      {loadingPreview ? (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            className="px-4 py-8 text-center text-zinc-500"
-                          >
-                            Loading preview…
-                          </td>
-                        </tr>
-                      ) : previewRows.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={5}
-                            className="px-4 py-8 text-center text-zinc-500"
-                          >
-                            No preview rows available yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        previewRows.map((row) => (
-                          <tr
-                            key={`${row.rank}-${row.player}`}
-                            className="transition-colors hover:bg-zinc-50"
-                          >
-                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-zinc-900">
-                              {row.isTiedRank ? `T${row.rank}` : row.rank}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-zinc-900">
-                              {row.player}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
-                              {row.gross}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
-                              {row.net}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm">
-                              <span
-                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                                  row.isSigned
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-rose-100 text-rose-700"
-                                }`}
-                              >
-                                {row.isSigned ? "Signed" : "Unsigned"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
             <div>
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-700">
                 RMR Cup Results
@@ -1334,8 +1032,10 @@ export default function AdminFinalizeWeekPage() {
                       <article
                         key={row.teamId}
                         className={`rounded-lg border p-4 ${
-                          row.status === "Scored"
+                          row.status === "Signed"
                             ? "border-emerald-200 bg-emerald-50/30"
+                            : row.status === "Scored"
+                              ? "border-amber-200 bg-amber-50/30"
                             : "border-rose-200 bg-rose-50/30"
                         }`}
                       >
@@ -1344,11 +1044,7 @@ export default function AdminFinalizeWeekPage() {
                             {row.team}
                           </h3>
                           <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                              row.status === "Scored"
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-rose-100 text-rose-700"
-                            }`}
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPreviewStatusClass(row.status)}`}
                           >
                             {row.status}
                           </span>
@@ -1473,11 +1169,7 @@ export default function AdminFinalizeWeekPage() {
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
                               <span
-                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
-                                  row.status === "Scored"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-rose-100 text-rose-700"
-                                }`}
+                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${getPreviewStatusClass(row.status)}`}
                               >
                                 {row.status}
                               </span>
