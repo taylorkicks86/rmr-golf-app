@@ -18,6 +18,7 @@ type CreateBody = {
   is_admin?: boolean;
   is_approved?: boolean;
   approved?: boolean;
+  paid?: boolean;
   cup?: boolean;
   cup_player?: boolean;
   cup_team_id?: string | null;
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
       : typeof body.cup_player === "boolean"
         ? body.cup_player
         : false;
+  const nextPaid = typeof body.paid === "boolean" ? body.paid : false;
   const requestedCupTeamId =
     typeof body.cup_team_id === "string" ? body.cup_team_id.trim() || null : body.cup_team_id ?? null;
 
@@ -189,9 +191,10 @@ export async function POST(request: NextRequest) {
       handicap_index: Number(handicap.toFixed(1)),
       is_admin: nextIsAdmin,
       is_approved: nextIsApproved,
+      paid: nextPaid,
       cup: nextCupPlayer,
     })
-    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, paid, cup")
     .single();
 
   if (createError || !createdPlayer) {

@@ -8,13 +8,15 @@ type Player = {
   full_name: string;
   handicap_index: number;
   ghin: string;
+  paid: boolean;
 };
 
 export default async function PlayersPage() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("players")
-    .select("id, full_name, handicap_index, ghin")
+    .select("id, full_name, handicap_index, ghin, paid")
+    .order("paid", { ascending: false })
     .order("full_name", { ascending: true });
 
   const players = (data as Player[]) ?? [];

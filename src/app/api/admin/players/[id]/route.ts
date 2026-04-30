@@ -15,6 +15,7 @@ type UpdateBody = {
   is_admin?: boolean;
   is_approved?: boolean;
   approved?: boolean;
+  paid?: boolean;
   cup?: boolean;
   cup_player?: boolean;
   cup_team_id?: string | null;
@@ -135,7 +136,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const { data: existingPlayer, error: existingPlayerError } = await serviceSupabase
     .from("players")
-    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, paid, cup")
     .eq("id", targetPlayerId)
     .maybeSingle();
 
@@ -165,6 +166,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       : typeof body.cup_player === "boolean"
         ? body.cup_player
         : Boolean((existingPlayer as { cup?: boolean }).cup);
+  const nextPaid = typeof body.paid === "boolean" ? body.paid : Boolean((existingPlayer as { paid?: boolean }).paid);
   const requestedCupTeamId =
     typeof body.cup_team_id === "string" ? body.cup_team_id.trim() || null : body.cup_team_id ?? null;
 
@@ -222,10 +224,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       handicap_index: Number(handicap.toFixed(1)),
       is_admin: nextIsAdmin,
       is_approved: nextIsApproved,
+      paid: nextPaid,
       cup: nextCupPlayer,
     })
     .eq("id", targetPlayerId)
-    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+    .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, paid, cup")
     .single();
 
   if (updateError) {

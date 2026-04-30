@@ -19,6 +19,7 @@ type Player = {
   email: string;
   auth_user_id: string | null;
   is_approved: boolean;
+  paid: boolean;
 };
 
 type LeagueWeek = {
@@ -219,8 +220,9 @@ export async function POST(request: NextRequest) {
     await Promise.all([
       supabase
         .from("players")
-        .select("id, full_name, email, auth_user_id, is_approved")
+        .select("id, full_name, email, auth_user_id, is_approved, paid")
         .eq("is_approved", true)
+        .order("paid", { ascending: false })
         .order("full_name"),
       supabase
         .from("weekly_participation")

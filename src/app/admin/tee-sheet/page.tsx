@@ -26,6 +26,7 @@ type LeagueWeek = {
 type Player = {
   id: string;
   full_name: string;
+  paid: boolean;
   cup: boolean;
 };
 
@@ -241,8 +242,9 @@ export default function AdminTeeSheetPage() {
 
       supabase
         .from("players")
-        .select("id, full_name, cup")
+        .select("id, full_name, paid, cup")
         .in("id", activePlayerIds)
+        .order("paid", { ascending: false })
         .order("full_name")
         .then(({ data: playersData, error: playersErr }) => {
           if (playersErr) {
@@ -254,8 +256,9 @@ export default function AdminTeeSheetPage() {
           }
 
           const players =
-            ((playersData as (Player & { cup: boolean | null })[]) ?? []).map((player) => ({
+            ((playersData as (Player & { cup: boolean | null; paid: boolean | null })[]) ?? []).map((player) => ({
               ...player,
+              paid: player.paid === true,
               cup: player.cup === true,
             })) ?? [];
           const validPlayerIds = new Set(players.map((player) => player.id));
@@ -789,7 +792,7 @@ export default function AdminTeeSheetPage() {
                             <option value="">Open Spot</option>
                             {playerOptions.map((player) => (
                               <option key={player.id} value={player.id}>
-                                {player.full_name}
+                                {player.paid ? player.full_name : `${player.full_name} (Sub)`}
                               </option>
                             ))}
                           </select>

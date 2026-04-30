@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 type Player = {
   id: string;
   full_name: string;
+  paid: boolean;
   cup: boolean;
 };
 
@@ -74,7 +75,11 @@ export function WeekControlParticipationTable({
     const supabase = createClient();
 
     Promise.all([
-      supabase.from("players").select("id, full_name, cup").order("full_name"),
+      supabase
+        .from("players")
+        .select("id, full_name, paid, cup")
+        .order("paid", { ascending: false })
+        .order("full_name"),
       supabase
         .from("weekly_participation")
         .select("id, player_id, playing_this_week, cup, attendance_status")
@@ -358,6 +363,7 @@ export function WeekControlParticipationTable({
                         className="font-medium text-emerald-700 underline-offset-2 transition-colors hover:text-emerald-800 hover:underline disabled:cursor-not-allowed disabled:text-zinc-500 disabled:no-underline"
                       >
                         {row.player.full_name}
+                        {!row.player.paid && <span className="ml-2 text-xs font-normal text-zinc-400">Sub</span>}
                       </button>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm">

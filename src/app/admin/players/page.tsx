@@ -15,6 +15,7 @@ type Player = {
   handicap_index: number;
   is_admin: boolean;
   is_approved: boolean;
+  paid: boolean;
   cup: boolean;
   cup_team_id: string | null;
   cup_team_name: string | null;
@@ -39,11 +40,20 @@ type EditFormState = {
   handicap_index: string;
   is_admin: boolean;
   is_approved: boolean;
+  paid: boolean;
   cup: boolean;
   create_account: boolean;
   password: string;
   cup_team_id: string | null;
 };
+
+function sortAdminPlayers(a: Player, b: Player) {
+  return (
+    Number(a.is_approved) - Number(b.is_approved) ||
+    Number(b.paid) - Number(a.paid) ||
+    a.full_name.localeCompare(b.full_name)
+  );
+}
 
 export default function AdminPlayersPage() {
   const router = useRouter();
@@ -64,7 +74,9 @@ export default function AdminPlayersPage() {
     Promise.all([
       supabase
         .from("players")
-        .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, cup")
+        .select("id, auth_user_id, full_name, email, ghin, handicap_index, is_admin, is_approved, paid, cup")
+        .order("is_approved", { ascending: true })
+        .order("paid", { ascending: false })
         .order("full_name"),
       supabase
         .from("seasons")
@@ -176,6 +188,7 @@ export default function AdminPlayersPage() {
       handicap_index: String(player.handicap_index),
       is_admin: player.is_admin,
       is_approved: player.is_approved,
+      paid: player.paid,
       cup: player.cup,
       create_account: false,
       password: "",
@@ -194,6 +207,7 @@ export default function AdminPlayersPage() {
       handicap_index: "0",
       is_admin: false,
       is_approved: false,
+      paid: false,
       cup: false,
       create_account: true,
       password: "",
@@ -235,6 +249,7 @@ export default function AdminPlayersPage() {
         handicap_index: parsedHandicap,
         is_admin: editForm.is_admin,
         is_approved: editForm.is_approved,
+        paid: editForm.paid,
         cup: editForm.cup,
         cup_team_id: editForm.cup ? editForm.cup_team_id : null,
         create_account: !isEditing ? editForm.create_account : undefined,
@@ -279,7 +294,7 @@ export default function AdminPlayersPage() {
             ...prev,
             { ...refreshedPlayer, cup_team_name: teamName, cup_team_id: refreshedPlayer.cup_team_id ?? null },
           ])
-        .sort((a, b) => a.full_name.localeCompare(b.full_name))
+        .sort(sortAdminPlayers)
     );
     setActionSuccess(body.message ?? (isEditing ? "Player updated." : "Player created."));
     setEditForm(null);
@@ -380,12 +395,8 @@ export default function AdminPlayersPage() {
                   <p className="text-right font-medium text-zinc-900">{player.ghin}</p>
                   <p className="text-zinc-500">Handicap</p>
                   <p className="text-right font-medium text-zinc-900">{player.handicap_index}</p>
-                  <p className="text-zinc-500">Admin</p>
-                  <p className="text-right font-medium text-zinc-900">{player.is_admin ? "Yes" : "No"}</p>
                   <p className="text-zinc-500">Approved</p>
                   <p className="text-right font-medium text-zinc-900">{player.is_approved ? "Yes" : "No"}</p>
-                  <p className="text-zinc-500">Account</p>
-                  <p className="text-right font-medium text-zinc-900">{player.auth_user_id ? "Linked" : "Needed"}</p>
                   <p className="text-zinc-500">Cup Player</p>
                   <p className="text-right font-medium text-zinc-900">{player.cup ? "Yes" : "No"}</p>
                   <p className="text-zinc-500">Cup Team</p>
@@ -481,13 +492,7 @@ export default function AdminPlayersPage() {
                 Handicap
               </th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
-                Admin
-              </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
                 Approved
-              </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
-                Account
               </th>
               <th scope="col" className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
                 Cup Player
@@ -503,7 +508,7 @@ export default function AdminPlayersPage() {
           <tbody className="divide-y divide-zinc-200 bg-white">
             {players.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-4 py-8 text-center text-zinc-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-zinc-500">
                   No players found.
                 </td>
               </tr>
@@ -514,11 +519,7 @@ export default function AdminPlayersPage() {
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.email}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.ghin}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.handicap_index}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.is_admin ? "Yes" : "No"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.is_approved ? "Yes" : "No"}</td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
-                    {player.auth_user_id ? "Linked" : "Needed"}
-                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.cup ? "Yes" : "No"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">{player.cup_team_name ?? "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm text-zinc-600">
@@ -721,6 +722,18 @@ export default function AdminPlayersPage() {
                   checked={editForm.is_approved}
                   onChange={(event) =>
                     setEditForm((prev) => (prev ? { ...prev, is_approved: event.target.checked } : prev))
+                  }
+                  className="h-5 w-5 accent-emerald-600"
+                />
+              </label>
+
+              <label className="flex items-center justify-between rounded-md border border-zinc-200 px-3 py-2">
+                <span className="text-sm font-medium text-zinc-700">Paid Member</span>
+                <input
+                  type="checkbox"
+                  checked={editForm.paid}
+                  onChange={(event) =>
+                    setEditForm((prev) => (prev ? { ...prev, paid: event.target.checked } : prev))
                   }
                   className="h-5 w-5 accent-emerald-600"
                 />

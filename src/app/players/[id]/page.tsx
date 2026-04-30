@@ -13,6 +13,7 @@ type Player = {
   full_name: string;
   handicap_index: number;
   ghin: string;
+  paid: boolean;
 };
 
 type Season = {
@@ -93,7 +94,7 @@ export default async function PlayerProfilePage({ params }: Props) {
 
   const { data: playerData, error: playerError } = await supabase
     .from("players")
-    .select("id, full_name, handicap_index, ghin")
+    .select("id, full_name, handicap_index, ghin, paid")
     .eq("id", id)
     .maybeSingle();
 
@@ -476,6 +477,7 @@ export default async function PlayerProfilePage({ params }: Props) {
         <div className="space-y-1 text-sm text-zinc-700">
           <p>Handicap Index: {player.handicap_index}</p>
           <p>GHIN: {player.ghin}</p>
+          <p>Membership: {player.paid ? "Paid" : "Sub"}</p>
         </div>
       </section>
 
