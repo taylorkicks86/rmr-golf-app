@@ -5,17 +5,21 @@ import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { computeCupSeasonStandings } from "@/lib/cup-standings";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { filterWeeksWithinSeasonDates } from "@/lib/season-weeks";
 
 type Season = {
   id: string;
   name: string;
   year: number;
+  start_date: string;
+  end_date: string;
   is_active: boolean;
 };
 
 type LeagueWeek = {
   id: string;
   week_number: number;
+  week_date: string;
   is_finalized: boolean;
   week_type: "regular" | "playoff";
   status: "open" | "finalized" | "cancelled" | "rained_out";
@@ -61,7 +65,7 @@ export default function StandingsPage() {
   const [rows, setRows] = useState<StandingRow[]>([]);
   const [finalizedWeeksCount, setFinalizedWeeksCount] = useState(0);
   const [countedWeeksTarget, setCountedWeeksTarget] = useState(10);
-  const [cancelledOrRainedOutCount, setCancelledOrRainedOutCount] = useState(0);
+  const [rainedOutCount, setRainedOutCount] = useState(0);
   const [loadingSeasons, setLoadingSeasons] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +74,7 @@ export default function StandingsPage() {
     const supabase = createClient();
     supabase
       .from("seasons")
-      .select("id, name, year, is_active")
+      .select("id, name, year, start_date, end_date, is_active")
       .order("year", { ascending: false })
       .order("start_date", { ascending: false })
       .then(({ data, error: err }) => {
@@ -99,7 +103,7 @@ export default function StandingsPage() {
       setRows([]);
       setFinalizedWeeksCount(0);
       setCountedWeeksTarget(10);
-      setCancelledOrRainedOutCount(0);
+      setRainedOutCount(0);
       return;
     }
 
@@ -109,7 +113,7 @@ export default function StandingsPage() {
 
     supabase
       .from("league_weeks")
-      .select("id, week_number, is_finalized, week_type, status")
+      .select("id, week_number, week_date, is_finalized, week_type, status")
       .eq("season_id", selectedSeasonId)
       .order("week_number", { ascending: true })
       .then(async ({ data, error: weeksError }) => {
@@ -121,7 +125,8 @@ export default function StandingsPage() {
           return;
         }
 
-        const weeks = (data as LeagueWeek[]) ?? [];
+        const selectedSeason = seasons.find((season) => season.id === selectedSeasonId) ?? null;
+        const weeks = filterWeeksWithinSeasonDates((data as LeagueWeek[]) ?? [], selectedSeason);
         const [cupResultsRes, playersRes, teamsRes, membersRes] = await Promise.all([
           supabase
             .from("weekly_cup_results")
@@ -195,7 +200,7 @@ export default function StandingsPage() {
 
         setFinalizedWeeksCount(seasonResult.finalizedRegularWeekIds.length);
         setCountedWeeksTarget(seasonResult.countedWeeksTarget);
-        setCancelledOrRainedOutCount(seasonResult.cancelledOrRainedOutRegularWeeks);
+        setRainedOutCount(seasonResult.rainedOutRegularWeeks);
 
         if (seasonResult.finalizedRegularWeekIds.length <= 1) {
           setRows(seasonResult.standings.map((row) => ({ ...row, movement: "—" })));
@@ -228,7 +233,7 @@ export default function StandingsPage() {
         setRows(withMovement);
         setLoadingRows(false);
       });
-  }, [selectedSeasonId]);
+  }, [seasons, selectedSeasonId]);
 
   useEffect(() => {
     loadStandings();
@@ -297,8 +302,8 @@ export default function StandingsPage() {
             <h2 className="text-sm font-semibold tracking-wide text-white sm:text-base">{standingsTitle}</h2>
             <p className="mt-0.5 text-[11px] text-emerald-100">
               Cup regular weeks finalized: {finalizedWeeksCount} · Best {countedWeeksTarget} count
-              {cancelledOrRainedOutCount > 0
-                ? ` (${cancelledOrRainedOutCount} cancelled/rained out)`
+              {rainedOutCount > 0
+                ? ` (${rainedOutCount} rained out)`
                 : ""}
             </p>
           </div>

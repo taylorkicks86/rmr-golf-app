@@ -14,12 +14,15 @@ import {
 } from "@/lib/live-scoring";
 import { formatHandicapForDisplay } from "@/lib/handicap-display";
 import { resolvePlayerProfileForUser } from "@/lib/player-profile";
+import { isPlayableSeasonWeek } from "@/lib/season-weeks";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 type Season = {
   id: string;
   name: string;
   year: number;
+  start_date: string;
+  end_date: string;
   is_active: boolean;
 };
 
@@ -28,6 +31,7 @@ type LeagueWeek = {
   week_number: number;
   week_date: string;
   is_finalized: boolean;
+  status: "open" | "finalized" | "cancelled" | "rained_out" | null;
 };
 
 type Player = {
@@ -143,6 +147,14 @@ function assignmentGroupKey(assignment: TeeAssignmentRecord): string {
   const teeTime = normalizeTeeTimeValue(assignment.tee_time);
   const groupNumber = assignment.group_number ?? 0;
   return `group:${groupNumber}:${teeTime}`;
+}
+
+function buildScoringDisplayWeekNumberById(weeks: LeagueWeek[]) {
+  const displayWeekNumberById = new Map<string, number>();
+  weeks.forEach((week, index) => {
+    displayWeekNumberById.set(week.id, index + 1);
+  });
+  return displayWeekNumberById;
 }
 
 type GroupedScoreEntryPageProps = {
@@ -320,7 +332,7 @@ export function GroupedScoreEntryPage({
     Promise.resolve(
       supabase
         .from("seasons")
-        .select("id, name, year, is_active")
+        .select("id, name, year, start_date, end_date, is_active")
         .order("is_active", { ascending: false })
         .order("year", { ascending: false })
         .order("start_date", { ascending: false })
@@ -349,7 +361,7 @@ export function GroupedScoreEntryPage({
 
         return supabase
           .from("league_weeks")
-          .select("id, week_number, week_date, is_finalized")
+          .select("id, week_number, week_date, is_finalized, status")
           .eq("season_id", initialSeasonId)
           .order("week_number", { ascending: true })
           .then(async ({ data, error: err }) => {
@@ -357,7 +369,10 @@ export function GroupedScoreEntryPage({
               setError(err.message);
               setWeeks([]);
             } else {
-              const nextWeeks = (data as LeagueWeek[]) ?? [];
+              const selectedSeason = loadedSeasons.find((season) => season.id === initialSeasonId) ?? null;
+              const nextWeeks = ((data as LeagueWeek[]) ?? []).filter((week) =>
+                isPlayableSeasonWeek(week, selectedSeason)
+              );
               const fallbackWeekId =
                 nextWeeks.find((week) => !week.is_finalized)?.id ??
                 nextWeeks[nextWeeks.length - 1]?.id ??
@@ -392,10 +407,11 @@ export function GroupedScoreEntryPage({
     }
 
     const supabase = createClient();
+    const selectedSeason = seasons.find((season) => season.id === selectedSeasonId) ?? null;
     setLoadingWeeks(true);
     supabase
       .from("league_weeks")
-      .select("id, week_number, week_date, is_finalized")
+      .select("id, week_number, week_date, is_finalized, status")
       .eq("season_id", selectedSeasonId)
       .order("week_number", { ascending: true })
       .then(async ({ data, error: err }) => {
@@ -406,7 +422,9 @@ export function GroupedScoreEntryPage({
           return;
         }
 
-        const nextWeeks = (data as LeagueWeek[]) ?? [];
+        const nextWeeks = ((data as LeagueWeek[]) ?? []).filter((week) =>
+          isPlayableSeasonWeek(week, selectedSeason)
+        );
         const fallbackWeekId =
           nextWeeks.find((week) => !week.is_finalized)?.id ??
           nextWeeks[nextWeeks.length - 1]?.id ??
@@ -422,7 +440,7 @@ export function GroupedScoreEntryPage({
         );
         setLoadingWeeks(false);
       });
-  }, [requireAdmin, selectedSeasonId]);
+  }, [requireAdmin, seasons, selectedSeasonId]);
 
   const loadData = useCallback(() => {
     if (!selectedWeekId) {
@@ -669,6 +687,7 @@ export function GroupedScoreEntryPage({
     () => weeks.find((week) => week.id === selectedWeekId) ?? null,
     [weeks, selectedWeekId]
   );
+  const displayWeekNumberById = useMemo(() => buildScoringDisplayWeekNumberById(weeks), [weeks]);
   const isFinalized = selectedWeek?.is_finalized === true;
 
   const groupedSections = useMemo<GroupSection[]>(() => {
@@ -1456,7 +1475,7 @@ export function GroupedScoreEntryPage({
               <option value="">Select a week…</option>
               {weeks.map((week) => (
                 <option key={week.id} value={week.id}>
-                  Week {week.week_number} — {week.week_date}
+                  Week {displayWeekNumberById.get(week.id) ?? week.week_number} — {week.week_date}
                 </option>
               ))}
             </select>

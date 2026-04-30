@@ -34,12 +34,12 @@ export type CupSeasonStandingResult = {
   standings: CupStandingRow[];
   finalizedRegularWeekIds: string[];
   countedWeeksTarget: number;
-  cancelledOrRainedOutRegularWeeks: number;
+  rainedOutRegularWeeks: number;
 };
 
-function resolveCountedWeeksTarget(cancelledOrRainedOutRegularWeeks: number): number {
-  if (cancelledOrRainedOutRegularWeeks >= 3) return 8;
-  if (cancelledOrRainedOutRegularWeeks >= 1) return 9;
+function resolveCountedWeeksTarget(rainedOutRegularWeeks: number): number {
+  if (rainedOutRegularWeeks >= 3) return 8;
+  if (rainedOutRegularWeeks >= 1) return 9;
   return 10;
 }
 
@@ -58,11 +58,14 @@ export function computeCupSeasonStandings({
 }: ComputeParams): CupSeasonStandingResult {
   // TODO(cup-playoffs): apply 1-stroke playoff advantage for regular-season winner and runner-up.
   const orderedWeeks = [...weeks].sort((a, b) => a.week_number - b.week_number);
-  const regularWeeks = orderedWeeks.filter((week) => (week.week_type ?? "regular") === "regular");
-
-  const cancelledOrRainedOutRegularWeeks = regularWeeks.filter((week) => {
+  const regularWeeks = orderedWeeks.filter((week) => {
     const status = week.status ?? (week.is_finalized ? "finalized" : "open");
-    return status === "cancelled" || status === "rained_out";
+    return (week.week_type ?? "regular") === "regular" && status !== "cancelled";
+  });
+
+  const rainedOutRegularWeeks = regularWeeks.filter((week) => {
+    const status = week.status ?? (week.is_finalized ? "finalized" : "open");
+    return status === "rained_out";
   }).length;
 
   const finalizedRegularWeekIds = finalizedRegularWeekIdsOverride
@@ -74,7 +77,7 @@ export function computeCupSeasonStandings({
         })
         .map((week) => week.id);
 
-  const countedWeeksTarget = resolveCountedWeeksTarget(cancelledOrRainedOutRegularWeeks);
+  const countedWeeksTarget = resolveCountedWeeksTarget(rainedOutRegularWeeks);
   const finalizedRegularWeekIdSet = new Set(finalizedRegularWeekIds);
 
   const cupPlayers = players.filter((player) => player.cup);
@@ -124,6 +127,6 @@ export function computeCupSeasonStandings({
     standings,
     finalizedRegularWeekIds,
     countedWeeksTarget,
-    cancelledOrRainedOutRegularWeeks,
+    rainedOutRegularWeeks,
   };
 }

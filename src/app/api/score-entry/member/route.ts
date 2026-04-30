@@ -4,13 +4,21 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { getActiveWeekHolesForWeek } from "@/lib/week-course";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
 import { resolvePlayerProfileForUser } from "@/lib/player-profile";
+import { isPlayableSeasonWeek } from "@/lib/season-weeks";
 import { createClient } from "@/lib/supabase/server";
+
+type Season = {
+  id: string;
+  start_date: string;
+  end_date: string;
+};
 
 type LeagueWeek = {
   id: string;
   week_number: number;
   week_date: string;
   is_finalized: boolean;
+  status: "open" | "finalized" | "cancelled" | "rained_out" | null;
 };
 
 type ParticipationRecord = {
@@ -94,7 +102,7 @@ export async function GET(request: NextRequest) {
 
   const { data: seasonData, error: seasonError } = await serviceSupabase
     .from("seasons")
-    .select("id")
+    .select("id, start_date, end_date")
     .order("is_active", { ascending: false })
     .order("year", { ascending: false })
     .order("start_date", { ascending: false })
@@ -105,8 +113,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: seasonError.message }, { status: 500 });
   }
 
-  const seasonId = (seasonData as { id: string } | null)?.id ?? null;
-  if (!seasonId) {
+  const season = (seasonData as Season | null) ?? null;
+  if (!season) {
     return NextResponse.json({
       currentPlayerId: playerResolution.player.id,
       currentPlayerIsAdmin: playerResolution.player.is_admin,
@@ -122,15 +130,17 @@ export async function GET(request: NextRequest) {
 
   const { data: weekData, error: weeksError } = await serviceSupabase
     .from("league_weeks")
-    .select("id, week_number, week_date, is_finalized")
-    .eq("season_id", seasonId)
+    .select("id, week_number, week_date, is_finalized, status")
+    .eq("season_id", season.id)
     .order("week_number", { ascending: true });
 
   if (weeksError) {
     return NextResponse.json({ error: weeksError.message }, { status: 500 });
   }
 
-  const allWeeks = (weekData as LeagueWeek[] | null) ?? [];
+  const allWeeks = ((weekData as LeagueWeek[] | null) ?? []).filter((week) =>
+    isPlayableSeasonWeek(week, season)
+  );
   const fallbackWeekId =
     allWeeks.find((week) => !week.is_finalized)?.id ??
     allWeeks[allWeeks.length - 1]?.id ??

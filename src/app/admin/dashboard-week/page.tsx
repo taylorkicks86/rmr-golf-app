@@ -5,12 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 
 import { AdminSeasonSelector } from "@/components/admin/AdminSeasonSelector";
 import { AdminWeeksTableSection } from "@/components/admin/AdminWeeksTableSection";
+import { filterWeeksWithinSeasonDates } from "@/lib/season-weeks";
 import { createClient } from "@/lib/supabase/client";
 
 type Season = {
   id: string;
   name: string;
   year: number;
+  start_date: string;
+  end_date: string;
   is_active: boolean;
 };
 
@@ -74,6 +77,10 @@ function resolveSelectableWeekId(weeks: LeagueWeek[], preferredWeekId: string) {
   );
 }
 
+function filterSeasonWeeks(weeks: LeagueWeek[], season: Season | null | undefined) {
+  return filterWeeksWithinSeasonDates(weeks, season);
+}
+
 function formatDashboardWeekLabel(week: LeagueWeek, displayWeekNumber: number | null | undefined) {
   const date = week.play_date ?? week.week_date;
   if (displayWeekNumber == null) {
@@ -106,7 +113,7 @@ export default function AdminDashboardWeekPage() {
     Promise.all([
       supabase
         .from("seasons")
-        .select("id, name, year, is_active")
+        .select("id, name, year, start_date, end_date, is_active")
         .order("is_active", { ascending: false })
         .order("year", { ascending: false })
         .order("start_date", { ascending: false }),
@@ -151,13 +158,15 @@ export default function AdminDashboardWeekPage() {
 
       const loadedSeasons = (seasonsRes.data as Season[]) ?? [];
       setSeasons(loadedSeasons);
-      const initialSeasonId = loadedSeasons[0]?.id ?? "";
+      const initialSeason = loadedSeasons[0] ?? null;
+      const initialSeasonId = initialSeason?.id ?? "";
       setSelectedSeasonId(initialSeasonId);
 
       const allWeeks = (weeksRes.data as (LeagueWeek & { season_id: string })[]) ?? [];
-      const list = initialSeasonId
-        ? allWeeks.filter((week) => week.season_id === initialSeasonId)
-        : allWeeks;
+      const list = filterSeasonWeeks(
+        initialSeasonId ? allWeeks.filter((week) => week.season_id === initialSeasonId) : allWeeks,
+        initialSeason
+      );
       const configList = (courseConfigsRes.data as CourseConfig[]) ?? [];
       setWeeks(list);
       setCourseConfigs(configList);
@@ -198,15 +207,20 @@ export default function AdminDashboardWeekPage() {
           return;
         }
 
-        const list = (data as LeagueWeek[]) ?? [];
+        const selectedSeason = seasons.find((season) => season.id === selectedSeasonId) ?? null;
+        const list = filterSeasonWeeks((data as LeagueWeek[]) ?? [], selectedSeason);
         setWeeks(list);
         setSelectedWeekId((prev) => resolveSelectableWeekId(list, prev));
       });
-  }, [selectedSeasonId]);
+  }, [seasons, selectedSeasonId]);
 
   const selectedWeek = useMemo(
     () => weeks.find((week) => week.id === selectedWeekId) ?? null,
     [weeks, selectedWeekId]
+  );
+  const selectedSeason = useMemo(
+    () => seasons.find((season) => season.id === selectedSeasonId) ?? null,
+    [seasons, selectedSeasonId]
   );
   const displayWeekNumberById = useMemo(() => buildDisplayWeekNumberById(weeks), [weeks]);
   const selectableWeeks = useMemo(() => weeks.filter(shouldCountWeek), [weeks]);
@@ -374,6 +388,7 @@ export default function AdminDashboardWeekPage() {
         </h2>
         <AdminWeeksTableSection
           seasonId={selectedSeasonId}
+          seasonDateRange={selectedSeason}
           onWeekUpdated={(updatedWeek) => {
             setWeeks((prev) =>
               prev.map((week) =>

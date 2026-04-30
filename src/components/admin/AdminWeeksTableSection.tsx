@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { filterWeeksWithinSeasonDates, type SeasonDateRange } from "@/lib/season-weeks";
 
 type LeagueWeek = {
   id: string;
@@ -15,6 +16,7 @@ type LeagueWeek = {
 
 type AdminWeeksTableSectionProps = {
   seasonId: string;
+  seasonDateRange?: SeasonDateRange | null;
   className?: string;
   onWeekUpdated?: (week: LeagueWeek) => void;
 };
@@ -40,7 +42,12 @@ function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
   return displayWeekNumberById;
 }
 
-export function AdminWeeksTableSection({ seasonId, className, onWeekUpdated }: AdminWeeksTableSectionProps) {
+export function AdminWeeksTableSection({
+  seasonId,
+  seasonDateRange,
+  className,
+  onWeekUpdated,
+}: AdminWeeksTableSectionProps) {
   const [weeks, setWeeks] = useState<LeagueWeek[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,11 +75,11 @@ export function AdminWeeksTableSection({ seasonId, className, onWeekUpdated }: A
           setError(err.message);
           setWeeks([]);
         } else {
-          setWeeks((data as LeagueWeek[]) ?? []);
+          setWeeks(filterWeeksWithinSeasonDates((data as LeagueWeek[]) ?? [], seasonDateRange));
         }
         setLoading(false);
       });
-  }, []);
+  }, [seasonDateRange]);
 
   useEffect(() => {
     loadWeeks(seasonId);

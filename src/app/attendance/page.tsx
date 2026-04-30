@@ -3,12 +3,15 @@ import Link from "next/link";
 import { SeasonAttendanceManager } from "@/components/attendance/SeasonAttendanceManager";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { resolvePlayerProfileForUser } from "@/lib/player-profile";
+import { filterWeeksWithinSeasonDates } from "@/lib/season-weeks";
 import { createClient } from "@/lib/supabase/server";
 
 type Season = {
   id: string;
   name: string;
   year: number;
+  start_date: string;
+  end_date: string;
 };
 
 type LeagueWeek = {
@@ -127,7 +130,7 @@ export default async function AttendancePage() {
 
   const { data: seasonData, error: seasonError } = await supabase
     .from("seasons")
-    .select("id, name, year")
+    .select("id, name, year, start_date, end_date")
     .order("is_active", { ascending: false })
     .order("year", { ascending: false })
     .order("start_date", { ascending: false })
@@ -165,7 +168,7 @@ export default async function AttendancePage() {
     );
   }
 
-  const weeks = (weekData as LeagueWeek[]) ?? [];
+  const weeks = filterWeeksWithinSeasonDates((weekData as LeagueWeek[]) ?? [], season);
   const weekIds = weeks.map((week) => week.id);
 
   let participationByWeekId = new Map<string, WeeklyParticipation>();

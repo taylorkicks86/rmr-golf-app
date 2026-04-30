@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
+import { isPlayableSeasonWeek } from "@/lib/season-weeks";
 import {
   allocateHandicapStrokesAcrossHoles,
   buildLiveHoleScoring,
@@ -17,6 +18,13 @@ type LeagueWeek = {
   week_number: number;
   week_date: string;
   is_finalized: boolean;
+  status: "open" | "finalized" | "cancelled" | "rained_out" | null;
+};
+
+type Season = {
+  id: string;
+  start_date: string;
+  end_date: string;
 };
 
 type LeaderboardRow = {
@@ -59,6 +67,14 @@ function formatScoreLabel(netToPar: number | null): string {
   return netToPar > 0 ? `+${netToPar}` : `${netToPar}`;
 }
 
+function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
+  const displayWeekNumberById = new Map<string, number>();
+  weeks.forEach((week, index) => {
+    displayWeekNumberById.set(week.id, index + 1);
+  });
+  return displayWeekNumberById;
+}
+
 function formatWeekDateToMonthDay(rawDate: string): string {
   const parsed = new Date(`${rawDate}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return rawDate;
@@ -74,12 +90,13 @@ export default function LeaderboardPage() {
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayWeekNumberById = buildDisplayWeekNumberById(weeks);
 
   useEffect(() => {
     const supabase = createClient();
     supabase
       .from("seasons")
-      .select("id")
+      .select("id, start_date, end_date")
       .order("is_active", { ascending: false })
       .order("year", { ascending: false })
       .order("start_date", { ascending: false })
@@ -93,8 +110,8 @@ export default function LeaderboardPage() {
           return;
         }
 
-        const seasonId = (seasonData as { id: string } | null)?.id ?? null;
-        if (!seasonId) {
+        const season = (seasonData as Season | null) ?? null;
+        if (!season) {
           setWeeks([]);
           setLoadingWeeks(false);
           return;
@@ -102,8 +119,8 @@ export default function LeaderboardPage() {
 
         supabase
           .from("league_weeks")
-          .select("id, week_number, week_date, is_finalized")
-          .eq("season_id", seasonId)
+          .select("id, week_number, week_date, is_finalized, status")
+          .eq("season_id", season.id)
           .order("week_date", { ascending: false })
           .then(async ({ data, error: weeksErr }) => {
             if (weeksErr) {
@@ -113,7 +130,9 @@ export default function LeaderboardPage() {
               return;
             }
 
-            const list = (data as LeagueWeek[]) ?? [];
+            const list = ((data as LeagueWeek[]) ?? []).filter((week) =>
+              isPlayableSeasonWeek(week, season)
+            );
             const fallbackWeekId = list.length > 0 ? list[0].id : "";
             const { filteredWeeks, initialWeekId } = await resolveWeekDropdownState({
               supabase,
@@ -383,7 +402,7 @@ export default function LeaderboardPage() {
             <option value="">Select a week…</option>
             {weeks.map((w) => (
               <option key={w.id} value={w.id}>
-                Week {w.week_number} — {w.week_date}
+                Week {displayWeekNumberById.get(w.id) ?? w.week_number} — {w.week_date}
               </option>
             ))}
           </select>
