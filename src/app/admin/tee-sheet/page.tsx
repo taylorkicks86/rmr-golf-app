@@ -21,6 +21,7 @@ type LeagueWeek = {
   week_date: string;
   play_date: string | null;
   is_finalized: boolean;
+  tee_sheet_published: boolean;
 };
 
 type Player = {
@@ -46,6 +47,13 @@ type TeeSlot = {
   id: string;
   playerId: string;
   teeTime: string;
+};
+
+type ReminderResponse = {
+  error?: string;
+  totalRecipients?: number;
+  sent?: number;
+  failed?: number;
 };
 
 const TEE_TIME_OPTIONS = [
@@ -112,6 +120,10 @@ export default function AdminTeeSheetPage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [sendingPaidReminder, setSendingPaidReminder] = useState(false);
+  const [showPaidReminderConfirm, setShowPaidReminderConfirm] = useState(false);
+  const [reminderMessage, setReminderMessage] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
   const loadWeeksForSeason = useCallback(async (seasonId: string) => {
@@ -126,7 +138,7 @@ export default function AdminTeeSheetPage() {
     setLoadingWeeks(true);
     const { data, error: err } = await supabase
       .from("league_weeks")
-      .select("id, week_number, week_date, play_date, is_finalized")
+      .select("id, week_number, week_date, play_date, is_finalized, tee_sheet_published")
       .eq("season_id", seasonId)
       .order("week_number", { ascending: true });
 
@@ -376,6 +388,7 @@ export default function AdminTeeSheetPage() {
     [weeks, selectedWeekId]
   );
   const isFinalized = selectedWeek?.is_finalized === true;
+  const isPublished = selectedWeek?.tee_sheet_published === true;
 
   const playerById = useMemo(
     () => new Map(activePlayers.map((player) => [player.id, player])),
@@ -395,6 +408,10 @@ export default function AdminTeeSheetPage() {
   const unassignedPlayers = useMemo(
     () => activePlayers.filter((player) => !assignedPlayerIds.has(player.id)),
     [activePlayers, assignedPlayerIds]
+  );
+  const paidPlayerCount = useMemo(
+    () => activePlayers.filter((player) => player.paid).length,
+    [activePlayers]
   );
 
   const boardGroupedByTime = useMemo(() => {
@@ -620,6 +637,76 @@ export default function AdminTeeSheetPage() {
     loadData();
   }, [activePlayers, isFinalized, loadData, notesByPlayerId, selectedWeekId, slots]);
 
+  const publishTeeSheet = useCallback(async () => {
+    if (!selectedWeekId || isFinalized || dirty) return;
+
+    const assignedCount = slots.filter((slot) => slot.playerId !== "").length;
+    if (assignedCount === 0) {
+      setSaveError("Assign and save at least one player before publishing the tee sheet.");
+      return;
+    }
+
+    setPublishing(true);
+    setSaveError(null);
+    const supabase = createClient();
+    const { error: publishError } = await supabase
+      .from("league_weeks")
+      .update({ tee_sheet_published: true })
+      .eq("id", selectedWeekId);
+
+    if (publishError) {
+      setSaveError(publishError.message);
+      setPublishing(false);
+      return;
+    }
+
+    setWeeks((prev) =>
+      prev.map((week) =>
+        week.id === selectedWeekId ? { ...week, tee_sheet_published: true } : week
+      )
+    );
+    setPublishing(false);
+  }, [dirty, isFinalized, selectedWeekId, slots]);
+
+  const sendPaidUndecidedReminders = useCallback(async () => {
+    if (!selectedWeekId) return;
+
+    setSendingPaidReminder(true);
+    setSaveError(null);
+    setReminderMessage(null);
+
+    const response = await fetch("/api/admin/rsvp-reminders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        weekId: selectedWeekId,
+        targetMode: "paid_undecided",
+      }),
+    });
+
+    const body = (await response.json().catch(() => null)) as ReminderResponse | null;
+    if (!response.ok) {
+      setSaveError(body?.error ?? "Failed to send paid player reminders.");
+      setSendingPaidReminder(false);
+      return;
+    }
+
+    const sent = body?.sent ?? 0;
+    const failed = body?.failed ?? 0;
+    const total = body?.totalRecipients ?? sent + failed;
+    setReminderMessage(
+      failed > 0
+        ? `Sent ${sent} of ${total} paid-player RSVP reminders. ${failed} failed.`
+        : total === 0
+          ? "No paid players are currently undecided for this week."
+          : `Sent ${sent} paid-player RSVP reminder${sent === 1 ? "" : "s"}.`
+    );
+    setSendingPaidReminder(false);
+    setShowPaidReminderConfirm(false);
+  }, [selectedWeekId]);
+
   if (loadingWeeks) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -674,6 +761,20 @@ export default function AdminTeeSheetPage() {
         </div>
       )}
 
+      {selectedWeekId && !isFinalized && (
+        <div
+          className={`mb-4 rounded-md border px-4 py-3 text-sm ${
+            isPublished
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-zinc-200 bg-zinc-50 text-zinc-700"
+          }`}
+        >
+          {isPublished
+            ? "This tee sheet is published on the public tee sheet page."
+            : "This tee sheet is not published yet. The public page will not show the final tee sheet until you publish it."}
+        </div>
+      )}
+
       {error && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -683,6 +784,12 @@ export default function AdminTeeSheetPage() {
       {saveError && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {saveError}
+        </div>
+      )}
+
+      {reminderMessage && (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {reminderMessage}
         </div>
       )}
 
@@ -715,7 +822,7 @@ export default function AdminTeeSheetPage() {
         </div>
       </section>
 
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={randomizeSlots}
@@ -724,14 +831,44 @@ export default function AdminTeeSheetPage() {
         >
           Randomize Slots
         </button>
-        <button
-          type="button"
-          onClick={saveTeeSheet}
-          disabled={!selectedWeekId || loadingRows || saving || activePlayers.length === 0 || isFinalized}
-          className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isFinalized ? "Week Finalized" : saving ? "Saving…" : dirty ? "Save Tee Sheet" : "Saved"}
-        </button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSaveError(null);
+              setReminderMessage(null);
+              setShowPaidReminderConfirm(true);
+            }}
+            disabled={!selectedWeekId || loadingRows || sendingPaidReminder || isFinalized || paidPlayerCount === 0}
+            className="rounded-md border border-sky-600 bg-white px-4 py-2 text-sm font-medium text-sky-700 shadow-sm transition-colors hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sendingPaidReminder ? "Sending…" : "Email Undecided"}
+          </button>
+          <button
+            type="button"
+            onClick={publishTeeSheet}
+            disabled={
+              !selectedWeekId ||
+              loadingRows ||
+              publishing ||
+              dirty ||
+              activePlayers.length === 0 ||
+              isFinalized ||
+              isPublished
+            }
+            className="rounded-md border border-emerald-600 bg-white px-4 py-2 text-sm font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPublished ? "Published" : publishing ? "Publishing…" : dirty ? "Save Before Publishing" : "Publish Tee Sheet"}
+          </button>
+          <button
+            type="button"
+            onClick={saveTeeSheet}
+            disabled={!selectedWeekId || loadingRows || saving || activePlayers.length === 0 || isFinalized}
+            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isFinalized ? "Week Finalized" : saving ? "Saving…" : dirty ? "Save Tee Sheet" : "Saved"}
+          </button>
+        </div>
       </div>
 
       <section className="rounded-lg border border-zinc-200 bg-white p-4">
@@ -814,6 +951,44 @@ export default function AdminTeeSheetPage() {
           onParticipationChange={loadData}
         />
       </section>
+
+      {showPaidReminderConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="paid-reminder-title"
+        >
+          <div className="w-full max-w-md rounded-lg border border-emerald-900/20 bg-white shadow-xl">
+            <div className="border-b border-zinc-200 px-5 py-4">
+              <h3 id="paid-reminder-title" className="text-lg font-semibold text-zinc-900">
+                Send RSVP Reminders
+              </h3>
+              <p className="mt-1 text-sm text-zinc-600">
+                Send the “are you playing this week” email to paid players who are still undecided?
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowPaidReminderConfirm(false)}
+                disabled={sendingPaidReminder}
+                className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={sendPaidUndecidedReminders}
+                disabled={sendingPaidReminder}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {sendingPaidReminder ? "Sending…" : "Yes, Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

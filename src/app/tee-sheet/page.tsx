@@ -19,6 +19,7 @@ type LeagueWeek = {
   week_date: string;
   play_date: string | null;
   is_finalized: boolean;
+  tee_sheet_published: boolean;
   status: "open" | "finalized" | "cancelled" | "rained_out" | null;
 };
 
@@ -114,7 +115,7 @@ export default function PublicTeeSheetPage() {
 
         supabase
           .from("league_weeks")
-          .select("id, week_number, week_date, play_date, is_finalized, status")
+          .select("id, week_number, week_date, play_date, is_finalized, tee_sheet_published, status")
           .eq("season_id", season.id)
           .order("week_number", { ascending: true })
           .then(async ({ data, error: err }) => {
@@ -339,7 +340,9 @@ export default function PublicTeeSheetPage() {
             <h2 className="text-lg font-semibold text-white sm:text-xl">Tee Sheet Board</h2>
           </div>
           <div className={cardBodyClass}>
-            {loadingRows ? (
+            {!selectedWeek?.tee_sheet_published ? (
+              <p className="text-sm text-zinc-600">The tee sheet has not been published yet.</p>
+            ) : loadingRows ? (
               <p className="text-sm text-zinc-500">Loading tee sheet…</p>
             ) : (
               <div className="grid gap-4 lg:grid-cols-3">
@@ -372,55 +375,59 @@ export default function PublicTeeSheetPage() {
           </div>
         </section>
 
-        <section className={`${cardClass} mb-6`}>
-          <div className={cardHeaderClass}>
-            <h2 className="text-lg font-semibold text-white sm:text-xl">Unassigned Players</h2>
-          </div>
-          <div className={cardBodyClass}>
-            {loadingRows ? (
-              <p className="text-sm text-zinc-500">Loading players…</p>
-            ) : unassignedPlayers.length === 0 ? (
-              <p className="text-sm text-zinc-500">
-                {hasAssignedTeeTimes
-                  ? "No playing players are waiting for an assignment."
-                  : "No saved tee sheet assignments yet."}
-              </p>
-            ) : (
-              <table className={listTableClass}>
-                <tbody className="divide-y divide-zinc-200">
-                  {unassignedPlayers.map((player) => (
-                    <tr key={`unassigned-${player.player_id}`}>
-                      <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
+        {!selectedWeek?.tee_sheet_published && (
+          <>
+            <section className={`${cardClass} mb-6`}>
+              <div className={cardHeaderClass}>
+                <h2 className="text-lg font-semibold text-white sm:text-xl">Unassigned Players</h2>
+              </div>
+              <div className={cardBodyClass}>
+                {loadingRows ? (
+                  <p className="text-sm text-zinc-500">Loading players…</p>
+                ) : unassignedPlayers.length === 0 ? (
+                  <p className="text-sm text-zinc-500">
+                    {hasAssignedTeeTimes
+                      ? "No playing players are waiting for an assignment."
+                      : "No saved tee sheet assignments yet."}
+                  </p>
+                ) : (
+                  <table className={listTableClass}>
+                    <tbody className="divide-y divide-zinc-200">
+                      {unassignedPlayers.map((player) => (
+                        <tr key={`unassigned-${player.player_id}`}>
+                          <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </section>
 
-        <section className={cardClass}>
-          <div className={cardHeaderClass}>
-            <h2 className="text-lg font-semibold text-white sm:text-xl">Marked No</h2>
-          </div>
-          <div className={cardBodyClass}>
-            {loadingRows ? (
-              <p className="text-sm text-zinc-500">Loading players…</p>
-            ) : notPlayingPlayers.length === 0 ? (
-              <p className="text-sm text-zinc-500">No players are marked no for this week.</p>
-            ) : (
-              <table className={listTableClass}>
-                <tbody className="divide-y divide-zinc-200">
-                  {notPlayingPlayers.map((player) => (
-                    <tr key={`not-playing-${player.player_id}`}>
-                      <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </section>
+            <section className={cardClass}>
+              <div className={cardHeaderClass}>
+                <h2 className="text-lg font-semibold text-white sm:text-xl">Marked No</h2>
+              </div>
+              <div className={cardBodyClass}>
+                {loadingRows ? (
+                  <p className="text-sm text-zinc-500">Loading players…</p>
+                ) : notPlayingPlayers.length === 0 ? (
+                  <p className="text-sm text-zinc-500">No players are marked no for this week.</p>
+                ) : (
+                  <table className={listTableClass}>
+                    <tbody className="divide-y divide-zinc-200">
+                      {notPlayingPlayers.map((player) => (
+                        <tr key={`not-playing-${player.player_id}`}>
+                          <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </div>
   );

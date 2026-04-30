@@ -4,7 +4,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { buildRsvpReminderEmail, createRsvpToken } from "@/lib/rsvp-email";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
-type ReminderTargetMode = "undecided" | "all" | "players";
+type ReminderTargetMode = "undecided" | "paid_undecided" | "all" | "players";
 
 type ReminderRequestBody = {
   weekId: string;
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
   if (
     !body ||
     typeof body.weekId !== "string" ||
-    !["undecided", "all", "players"].includes(targetMode) ||
+    !["undecided", "paid_undecided", "all", "players"].includes(targetMode) ||
     (targetMode === "players" && (!Array.isArray(body.playerIds) || body.playerIds.length === 0))
   ) {
     return NextResponse.json({ error: "Invalid reminder request." }, { status: 400 });
@@ -246,6 +246,7 @@ export async function POST(request: NextRequest) {
     const record = participationByPlayerId.get(player.id) ?? null;
     if (targetMode === "players") return selectedPlayerIds.has(player.id);
     if (targetMode === "all") return true;
+    if (targetMode === "paid_undecided") return player.paid && getStatusLabel(record) === "undecided";
     return getStatusLabel(record) === "undecided";
   });
 
