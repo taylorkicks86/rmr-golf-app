@@ -4,10 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/ui/PageHeader";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
+import { isPlayableSeasonWeek } from "@/lib/season-weeks";
 import { createClient } from "@/lib/supabase/client";
 
 type Season = {
   id: string;
+  start_date: string;
+  end_date: string;
 };
 
 type LeagueWeek = {
@@ -16,6 +19,7 @@ type LeagueWeek = {
   week_date: string;
   play_date: string | null;
   is_finalized: boolean;
+  status: "open" | "finalized" | "cancelled" | "rained_out" | null;
 };
 
 type Player = {
@@ -29,6 +33,11 @@ type TeeAssignmentRecord = {
   tee_time: string;
   group_number: number | null;
   position_in_group: number | null;
+};
+
+type TeeSheetPlayerRecord = {
+  player_id: string;
+  player_name: string;
 };
 
 type Row = {
@@ -73,6 +82,8 @@ export default function PublicTeeSheetPage() {
   const [weeks, setWeeks] = useState<LeagueWeek[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState<string>("");
   const [rows, setRows] = useState<Row[]>([]);
+  const [unassignedPlayers, setUnassignedPlayers] = useState<TeeSheetPlayerRecord[]>([]);
+  const [notPlayingPlayers, setNotPlayingPlayers] = useState<TeeSheetPlayerRecord[]>([]);
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +92,7 @@ export default function PublicTeeSheetPage() {
     const supabase = createClient();
     supabase
       .from("seasons")
-      .select("id")
+      .select("id, start_date, end_date")
       .order("is_active", { ascending: false })
       .order("year", { ascending: false })
       .order("start_date", { ascending: false })
@@ -103,7 +114,7 @@ export default function PublicTeeSheetPage() {
 
         supabase
           .from("league_weeks")
-          .select("id, week_number, week_date, play_date, is_finalized")
+          .select("id, week_number, week_date, play_date, is_finalized, status")
           .eq("season_id", season.id)
           .order("week_number", { ascending: true })
           .then(async ({ data, error: err }) => {
@@ -111,7 +122,9 @@ export default function PublicTeeSheetPage() {
               setError(err.message);
               setWeeks([]);
             } else {
-              const nextWeeks = (data as LeagueWeek[]) ?? [];
+              const nextWeeks = ((data as LeagueWeek[]) ?? []).filter((week) =>
+                isPlayableSeasonWeek(week, season)
+              );
               const fallbackWeekId =
                 nextWeeks.find((week) => !week.is_finalized)?.id ??
                 nextWeeks[nextWeeks.length - 1]?.id ??
@@ -134,6 +147,8 @@ export default function PublicTeeSheetPage() {
   const loadData = useCallback(() => {
     if (!selectedWeekId) {
       setRows([]);
+      setUnassignedPlayers([]);
+      setNotPlayingPlayers([]);
       return;
     }
 
@@ -146,6 +161,8 @@ export default function PublicTeeSheetPage() {
           | {
               error?: string;
               assignments?: TeeAssignmentRecord[];
+              unassignedPlayers?: TeeSheetPlayerRecord[];
+              notPlayingPlayers?: TeeSheetPlayerRecord[];
             }
           | null;
 
@@ -153,9 +170,20 @@ export default function PublicTeeSheetPage() {
           throw new Error(body?.error ?? "Failed to load tee assignments.");
         }
 
-        return body?.assignments ?? [];
+        return {
+          assignments: body?.assignments ?? [],
+          unassignedPlayers: body?.unassignedPlayers ?? [],
+          notPlayingPlayers: body?.notPlayingPlayers ?? [],
+        };
       })
-      .then((assignments) => {
+      .then(({ assignments, unassignedPlayers: nextUnassignedPlayers, notPlayingPlayers: nextNotPlayingPlayers }) => {
+        setUnassignedPlayers(
+          [...nextUnassignedPlayers].sort((a, b) => a.player_name.localeCompare(b.player_name))
+        );
+        setNotPlayingPlayers(
+          [...nextNotPlayingPlayers].sort((a, b) => a.player_name.localeCompare(b.player_name))
+        );
+
         if (assignments.length === 0) {
           setRows([]);
           setLoadingRows(false);
@@ -181,6 +209,8 @@ export default function PublicTeeSheetPage() {
         const message = fetchError instanceof Error ? fetchError.message : "Failed to load tee sheet.";
         setError(message);
         setRows([]);
+        setUnassignedPlayers([]);
+        setNotPlayingPlayers([]);
         setLoadingRows(false);
       });
   }, [selectedWeekId]);
@@ -192,11 +222,6 @@ export default function PublicTeeSheetPage() {
   const selectedWeek = useMemo(
     () => weeks.find((week) => week.id === selectedWeekId) ?? null,
     [weeks, selectedWeekId]
-  );
-
-  const playingRows = useMemo(
-    () => [...rows].sort((a, b) => a.player.full_name.localeCompare(b.player.full_name)),
-    [rows]
   );
 
   const boardGroupedByTime = useMemo(() => {
@@ -241,6 +266,7 @@ export default function PublicTeeSheetPage() {
     () => rows.some((row) => ALLOWED_TEE_TIMES.has(row.teeTime.trim())),
     [rows]
   );
+  const listTableClass = "w-full divide-y divide-zinc-200 text-sm";
   const cardClass = "overflow-hidden rounded-md border border-emerald-900/20 bg-[#f8f7f2] shadow-md";
   const cardHeaderClass = "border-b border-emerald-950/35 bg-[#1d392f] px-3 py-2 text-white";
   const cardBodyClass = "p-4 sm:p-5";
@@ -313,26 +339,6 @@ export default function PublicTeeSheetPage() {
             <h2 className="text-lg font-semibold text-white sm:text-xl">Tee Sheet Board</h2>
           </div>
           <div className={cardBodyClass}>
-            {!loadingRows && !hasAssignedTeeTimes && (
-              <div className="mb-4 rounded-md border border-emerald-900/15 bg-white/75 p-3">
-                <h3 className="mb-2 text-sm font-semibold text-zinc-800">Playing This Week</h3>
-                {playingRows.length === 0 ? (
-                  <p className="text-sm text-zinc-500">No players are marked as playing for this week.</p>
-                ) : (
-                  <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {playingRows.map((row) => (
-                      <li
-                        key={`playing-${row.player.id}`}
-                        className="rounded-md border border-emerald-900/15 bg-white px-3 py-2 text-sm font-medium text-zinc-900"
-                      >
-                        {row.player.full_name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
             {loadingRows ? (
               <p className="text-sm text-zinc-500">Loading tee sheet…</p>
             ) : (
@@ -362,6 +368,56 @@ export default function PublicTeeSheetPage() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        </section>
+
+        <section className={`${cardClass} mb-6`}>
+          <div className={cardHeaderClass}>
+            <h2 className="text-lg font-semibold text-white sm:text-xl">Unassigned Players</h2>
+          </div>
+          <div className={cardBodyClass}>
+            {loadingRows ? (
+              <p className="text-sm text-zinc-500">Loading players…</p>
+            ) : unassignedPlayers.length === 0 ? (
+              <p className="text-sm text-zinc-500">
+                {hasAssignedTeeTimes
+                  ? "No playing players are waiting for an assignment."
+                  : "No saved tee sheet assignments yet."}
+              </p>
+            ) : (
+              <table className={listTableClass}>
+                <tbody className="divide-y divide-zinc-200">
+                  {unassignedPlayers.map((player) => (
+                    <tr key={`unassigned-${player.player_id}`}>
+                      <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        <section className={cardClass}>
+          <div className={cardHeaderClass}>
+            <h2 className="text-lg font-semibold text-white sm:text-xl">Marked No</h2>
+          </div>
+          <div className={cardBodyClass}>
+            {loadingRows ? (
+              <p className="text-sm text-zinc-500">Loading players…</p>
+            ) : notPlayingPlayers.length === 0 ? (
+              <p className="text-sm text-zinc-500">No players are marked no for this week.</p>
+            ) : (
+              <table className={listTableClass}>
+                <tbody className="divide-y divide-zinc-200">
+                  {notPlayingPlayers.map((player) => (
+                    <tr key={`not-playing-${player.player_id}`}>
+                      <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </section>

@@ -39,9 +39,9 @@ export async function GET(
   const [participationRes, teeTimesRes] = await Promise.all([
     serviceSupabase
       .from("weekly_participation")
-      .select("player_id")
+      .select("player_id, playing_this_week")
       .eq("league_week_id", weekId)
-      .eq("playing_this_week", true),
+      .in("playing_this_week", [true, false]),
     serviceSupabase
       .from("weekly_tee_times")
       .select("player_id, tee_time, group_number, position_in_group")
@@ -55,8 +55,13 @@ export async function GET(
     return NextResponse.json({ error: teeTimesRes.error.message }, { status: 500 });
   }
 
+  const participationRows =
+    (participationRes.data as { player_id: string; playing_this_week: boolean | null }[] | null) ?? [];
   const activePlayerIds = new Set(
-    (((participationRes.data as { player_id: string }[] | null) ?? []).map((row) => row.player_id))
+    participationRows.filter((row) => row.playing_this_week === true).map((row) => row.player_id)
+  );
+  const notPlayingPlayerIds = new Set(
+    participationRows.filter((row) => row.playing_this_week === false).map((row) => row.player_id)
   );
   const assignments =
     ((teeTimesRes.data as
@@ -69,7 +74,9 @@ export async function GET(
       | null) ?? []
     ).filter((row) => activePlayerIds.has(row.player_id));
 
-  const visiblePlayerIds = Array.from(activePlayerIds);
+  const assignedPlayerIds = new Set(assignments.map((row) => row.player_id));
+  const unassignedPlayerIds = Array.from(activePlayerIds).filter((playerId) => !assignedPlayerIds.has(playerId));
+  const visiblePlayerIds = Array.from(new Set([...activePlayerIds, ...notPlayingPlayerIds]));
   const playerNamesById = new Map<string, string>();
 
   if (visiblePlayerIds.length > 0) {
@@ -91,6 +98,14 @@ export async function GET(
     assignments: assignments.map((row) => ({
       ...row,
       player_name: playerNamesById.get(row.player_id) ?? "",
+    })),
+    unassignedPlayers: unassignedPlayerIds.map((playerId) => ({
+      player_id: playerId,
+      player_name: playerNamesById.get(playerId) ?? "",
+    })),
+    notPlayingPlayers: Array.from(notPlayingPlayerIds).map((playerId) => ({
+      player_id: playerId,
+      player_name: playerNamesById.get(playerId) ?? "",
     })),
   });
 }
