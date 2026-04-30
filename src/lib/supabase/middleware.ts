@@ -35,10 +35,16 @@ export async function updateSession(request: NextRequest) {
   const isProfileErrorRoute = pathname === "/profile-error";
   const isAuthCallbackRoute = pathname.startsWith("/auth/callback");
   const isAuthConfirmRoute = pathname.startsWith("/auth/confirm");
+  const isRsvpRespondRoute = pathname === "/rsvp/respond";
   const isUpdatePasswordRoute = pathname === "/update-password";
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const isPublicRoute =
-    isLoginRoute || isSignupRoute || isAuthCallbackRoute || isAuthConfirmRoute || isUpdatePasswordRoute;
+    isLoginRoute ||
+    isSignupRoute ||
+    isAuthCallbackRoute ||
+    isAuthConfirmRoute ||
+    isRsvpRespondRoute ||
+    isUpdatePasswordRoute;
 
   const createRedirectResponse = (redirectUrl: URL) => {
     const redirectResponse = NextResponse.redirect(redirectUrl);

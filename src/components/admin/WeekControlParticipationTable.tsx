@@ -25,6 +25,20 @@ type Row = {
   cup: boolean;
 };
 
+type ReminderResponse = {
+  error?: string;
+  totalRecipients?: number;
+  sent?: number;
+  failed?: number;
+  results?: Array<{
+    playerId: string;
+    playerName: string;
+    email: string;
+    status: "sent" | "skipped" | "failed";
+    message?: string;
+  }>;
+};
+
 type WeekControlParticipationTableProps = {
   selectedWeekId: string;
   isFinalized: boolean;
@@ -41,6 +55,9 @@ export function WeekControlParticipationTable({
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savingPlayerId, setSavingPlayerId] = useState<string | null>(null);
+  const [reminderPlayer, setReminderPlayer] = useState<Player | null>(null);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [reminderMessage, setReminderMessage] = useState<string | null>(null);
 
   const loadData = useCallback(() => {
     if (!selectedWeekId) {
@@ -52,6 +69,7 @@ export function WeekControlParticipationTable({
 
     setLoadingRows(true);
     setSaveError(null);
+    setReminderMessage(null);
     setError(null);
     const supabase = createClient();
 
@@ -218,6 +236,42 @@ export function WeekControlParticipationTable({
     };
   };
 
+  const sendReminder = useCallback(async () => {
+    if (!selectedWeekId || !reminderPlayer) return;
+
+    setSendingReminder(true);
+    setReminderMessage(null);
+    const response = await fetch("/api/admin/rsvp-reminders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        weekId: selectedWeekId,
+        targetMode: "players",
+        playerIds: [reminderPlayer.id],
+      }),
+    });
+
+    const body = (await response.json().catch(() => null)) as ReminderResponse | null;
+    if (!response.ok) {
+      setReminderMessage(body?.error ?? "Failed to send reminder.");
+      setSendingReminder(false);
+      return;
+    }
+
+    const failedResult = body?.results?.find((result) => result.status === "failed");
+    if (failedResult) {
+      setReminderMessage(failedResult.message ?? "Reminder failed to send.");
+      setSendingReminder(false);
+      return;
+    }
+
+    setReminderMessage(`Reminder sent to ${reminderPlayer.full_name}.`);
+    setSendingReminder(false);
+    setReminderPlayer(null);
+  }, [reminderPlayer, selectedWeekId]);
+
   return (
     <>
       {error && (
@@ -229,6 +283,12 @@ export function WeekControlParticipationTable({
       {saveError && (
         <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {saveError}
+        </div>
+      )}
+
+      {reminderMessage && (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {reminderMessage}
         </div>
       )}
 
@@ -288,7 +348,17 @@ export function WeekControlParticipationTable({
                 return (
                   <tr key={row.player.id} className="transition-colors hover:bg-zinc-50">
                     <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-zinc-900">
-                      {row.player.full_name}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReminderMessage(null);
+                          setReminderPlayer(row.player);
+                        }}
+                        disabled={isFinalized || !selectedWeekId}
+                        className="font-medium text-emerald-700 underline-offset-2 transition-colors hover:text-emerald-800 hover:underline disabled:cursor-not-allowed disabled:text-zinc-500 disabled:no-underline"
+                      >
+                        {row.player.full_name}
+                      </button>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status.className}`}>
@@ -328,6 +398,52 @@ export function WeekControlParticipationTable({
           </tbody>
         </table>
       </div>
+
+      {reminderPlayer && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-reminder-title"
+        >
+          <div className="w-full max-w-md rounded-lg border border-emerald-900/20 bg-white shadow-xl">
+            <div className="border-b border-zinc-200 px-5 py-4">
+              <h3 id="send-reminder-title" className="text-lg font-semibold text-zinc-900">
+                Send Reminder
+              </h3>
+              <p className="mt-1 text-sm text-zinc-600">
+                Send an RSVP reminder email to {reminderPlayer.full_name} for this week?
+              </p>
+            </div>
+            {reminderMessage && (
+              <div className="mx-5 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {reminderMessage}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setReminderPlayer(null);
+                  setReminderMessage(null);
+                }}
+                disabled={sendingReminder}
+                className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={sendReminder}
+                disabled={sendingReminder}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {sendingReminder ? "Sending..." : "Yes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
