@@ -335,34 +335,40 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
   }
 
   let lastRounds: LastRoundResult[] = [];
-  const finalizedWeeks = weeks.filter((week) => week.is_finalized);
-  if (finalizedWeeks.length > 0) {
-    const finalizedWeekIds = finalizedWeeks.map((week) => week.id);
-    const [playerScoresRes, weeklyHandicapsRes] = await Promise.all([
+  const { data: allPlayerScoresData, error: allPlayerScoresError } = await supabase
+    .from("weekly_scores")
+    .select("league_week_id, gross_score")
+    .eq("player_id", player.id);
+
+  if (allPlayerScoresError) {
+    return { data: null, error: allPlayerScoresError.message };
+  }
+
+  const allPlayerScores = (allPlayerScoresData as { league_week_id: string; gross_score: number }[] | null) ?? [];
+  const allScoredWeekIds = Array.from(new Set(allPlayerScores.map((score) => score.league_week_id)));
+  if (allScoredWeekIds.length > 0) {
+    const [roundWeeksRes, weeklyHandicapsRes] = await Promise.all([
       supabase
-        .from("weekly_scores")
-        .select("league_week_id, gross_score")
-        .eq("player_id", player.id)
-        .in("league_week_id", finalizedWeekIds),
+        .from("league_weeks")
+        .select("id, week_number, week_date, play_date, is_finalized, side_to_play")
+        .in("id", allScoredWeekIds)
+        .eq("is_finalized", true),
       supabase
         .from("weekly_handicaps")
         .select("league_week_id, final_computed_handicap")
         .eq("player_id", player.id)
-        .in("league_week_id", finalizedWeekIds),
+        .in("league_week_id", allScoredWeekIds),
     ]);
 
-    if (playerScoresRes.error) {
-      return { data: null, error: playerScoresRes.error.message };
+    if (roundWeeksRes.error) {
+      return { data: null, error: roundWeeksRes.error.message };
     }
     if (weeklyHandicapsRes.error) {
       return { data: null, error: weeklyHandicapsRes.error.message };
     }
 
     const scoreByWeekId = new Map(
-      (((playerScoresRes.data as { league_week_id: string; gross_score: number }[] | null) ?? []).map((score) => [
-        score.league_week_id,
-        Number(score.gross_score),
-      ]))
+      allPlayerScores.map((score) => [score.league_week_id, Number(score.gross_score)])
     );
     const weeklyHandicapByWeekId = new Map(
       (((weeklyHandicapsRes.data as WeeklyHandicapByWeekRow[] | null) ?? []).map((row) => [
@@ -371,9 +377,9 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
       ]))
     );
 
-    lastRounds = [...finalizedWeeks]
+    lastRounds = [...((roundWeeksRes.data as LeagueWeek[] | null) ?? [])]
       .filter((week) => scoreByWeekId.has(week.id))
-      .sort((a, b) => b.week_number - a.week_number)
+      .sort((a, b) => (b.play_date ?? b.week_date).localeCompare(a.play_date ?? a.week_date))
       .slice(0, 6)
       .map((week) => {
         const gross = scoreByWeekId.get(week.id) ?? 0;

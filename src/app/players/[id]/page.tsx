@@ -25,6 +25,7 @@ type LeagueWeek = {
   id: string;
   week_number: number;
   week_date: string;
+  play_date?: string | null;
   is_finalized: boolean;
   week_type?: "regular" | "playoff";
   status?: "open" | "finalized" | "cancelled" | "rained_out";
@@ -364,6 +365,100 @@ export default async function PlayerProfilePage({ params }: Props) {
       totalPoints = playerStanding?.countedPoints ?? 0;
       weeksPlayed = playerStanding?.weeksPlayed ?? 0;
     }
+  }
+
+  const { data: allPlayerScoresData, error: allPlayerScoresError } = await supabase
+    .from("weekly_scores")
+    .select("league_week_id, player_id, gross_score")
+    .eq("player_id", player.id);
+
+  if (allPlayerScoresError) {
+    return (
+      <PlayersShell
+        title="Player Profile"
+        subtitle="Player details, season snapshot, and weekly results."
+        rightSlot={
+          <Link href="/players" className="text-sm font-medium text-emerald-600 hover:underline">
+            ← Players
+          </Link>
+        }
+      >
+        <p className="text-red-600">Error: {allPlayerScoresError.message}</p>
+      </PlayersShell>
+    );
+  }
+
+  const allPlayerScores = (allPlayerScoresData as WeeklyScoreRow[] | null) ?? [];
+  const allScoredWeekIds = Array.from(new Set(allPlayerScores.map((score) => score.league_week_id)));
+
+  if (allScoredWeekIds.length > 0) {
+    const [allWeeksRes, allWeeklyHandicapsRes] = await Promise.all([
+      supabase
+        .from("league_weeks")
+        .select("id, week_number, week_date, play_date, is_finalized")
+        .in("id", allScoredWeekIds)
+        .eq("is_finalized", true),
+      supabase
+        .from("weekly_handicaps")
+        .select("league_week_id, player_id, final_computed_handicap")
+        .eq("player_id", player.id)
+        .in("league_week_id", allScoredWeekIds),
+    ]);
+
+    if (allWeeksRes.error) {
+      return (
+        <PlayersShell
+          title="Player Profile"
+          subtitle="Player details, season snapshot, and weekly results."
+          rightSlot={
+            <Link href="/players" className="text-sm font-medium text-emerald-600 hover:underline">
+              ← Players
+            </Link>
+          }
+        >
+          <p className="text-red-600">Error: {allWeeksRes.error.message}</p>
+        </PlayersShell>
+      );
+    }
+
+    if (allWeeklyHandicapsRes.error) {
+      return (
+        <PlayersShell
+          title="Player Profile"
+          subtitle="Player details, season snapshot, and weekly results."
+          rightSlot={
+            <Link href="/players" className="text-sm font-medium text-emerald-600 hover:underline">
+              ← Players
+            </Link>
+          }
+        >
+          <p className="text-red-600">Error: {allWeeklyHandicapsRes.error.message}</p>
+        </PlayersShell>
+      );
+    }
+
+    const scoreByWeekId = new Map(allPlayerScores.map((score) => [score.league_week_id, score]));
+    const handicapByWeekId = new Map(
+      ((allWeeklyHandicapsRes.data as (WeeklyHandicapByWeekRow & { player_id: string })[] | null) ?? []).map(
+        (row) => [row.league_week_id, Number(row.final_computed_handicap)]
+      )
+    );
+
+    weeklyResults = ((allWeeksRes.data as LeagueWeek[] | null) ?? [])
+      .filter((week) => scoreByWeekId.has(week.id))
+      .sort((a, b) => (b.play_date ?? b.week_date).localeCompare(a.play_date ?? a.week_date))
+      .map((week) => {
+        const score = scoreByWeekId.get(week.id);
+        const gross = Number(score?.gross_score ?? 0);
+        const handicap = handicapByWeekId.get(week.id) ?? Number(player.handicap_index);
+        return {
+          weekId: week.id,
+          weekNumber: week.week_number,
+          weekDate: week.play_date ?? week.week_date,
+          gross,
+          net: Number((gross - handicap).toFixed(1)),
+        };
+      });
   }
 
   return (
