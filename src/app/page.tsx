@@ -156,16 +156,29 @@ function formatWeekDateShort(raw: string | null): string | null {
   return `${mm}/${dd}/${yy}`;
 }
 
-async function fetchDashboardWeatherSummary(location: WeatherLocation): Promise<string | null> {
+async function fetchDashboardWeatherSummary({
+  location,
+  targetDate,
+}: {
+  location: WeatherLocation;
+  targetDate: string | null;
+}): Promise<string | null> {
   try {
     const searchParams = new URLSearchParams({
       latitude: String(location.latitude),
       longitude: String(location.longitude),
       temperature_unit: "fahrenheit",
-      current_weather: "true",
-      hourly: "precipitation_probability",
+      wind_speed_unit: "mph",
+      hourly: "temperature_2m,precipitation_probability,wind_speed_10m",
       timezone: "America/New_York",
     });
+
+    if (targetDate) {
+      searchParams.set("start_date", targetDate);
+      searchParams.set("end_date", targetDate);
+    } else {
+      searchParams.set("forecast_days", "1");
+    }
 
     const response = await fetch(
       `https://api.open-meteo.com/v1/forecast?${searchParams.toString()}`,
@@ -175,34 +188,45 @@ async function fetchDashboardWeatherSummary(location: WeatherLocation): Promise<
     if (!response.ok) return null;
 
     const data = (await response.json()) as {
-      current_weather?: { temperature?: number; time?: string };
-      hourly?: { time?: string[]; precipitation_probability?: Array<number | null> };
+      hourly?: {
+        time?: string[];
+        temperature_2m?: Array<number | null>;
+        precipitation_probability?: Array<number | null>;
+        wind_speed_10m?: Array<number | null>;
+      };
     };
 
-    const temp = Number(data.current_weather?.temperature);
-    if (!Number.isFinite(temp)) return null;
-
     const hourlyTimes = data.hourly?.time ?? [];
+    const hourlyTemps = data.hourly?.temperature_2m ?? [];
     const hourlyRain = data.hourly?.precipitation_probability ?? [];
-    if (hourlyTimes.length === 0 || hourlyRain.length === 0) {
-      return `${Math.round(temp)}°F`;
+    const hourlyWind = data.hourly?.wind_speed_10m ?? [];
+    if (hourlyTimes.length === 0 || hourlyTemps.length === 0) {
+      return null;
     }
 
-    const currentTime = data.current_weather?.time ? new Date(data.current_weather.time).getTime() : Date.now();
-    let bestIndex = 0;
-    let bestDelta = Number.POSITIVE_INFINITY;
-    hourlyTimes.forEach((time, index) => {
-      const millis = new Date(time).getTime();
-      const delta = Math.abs(millis - currentTime);
-      if (Number.isFinite(delta) && delta < bestDelta) {
-        bestDelta = delta;
-        bestIndex = index;
-      }
+    const windowIndexes = hourlyTimes.flatMap((time, index) => {
+      const [datePart, timePart] = time.split("T");
+      const hour = Number(timePart?.slice(0, 2));
+      if (targetDate && datePart !== targetDate) return [];
+      return hour >= 17 && hour <= 19 ? [index] : [];
     });
 
-    const rain = Number(hourlyRain[bestIndex] ?? 0);
-    const rainPercent = Number.isFinite(rain) ? Math.round(rain) : 0;
-    return `${Math.round(temp)}°F • Rain ${rainPercent}%`;
+    if (windowIndexes.length === 0) {
+      return null;
+    }
+
+    const temps = windowIndexes.map((index) => Number(hourlyTemps[index])).filter(Number.isFinite);
+    const rainValues = windowIndexes.map((index) => Number(hourlyRain[index] ?? 0)).filter(Number.isFinite);
+    const windValues = windowIndexes.map((index) => Number(hourlyWind[index] ?? 0)).filter(Number.isFinite);
+    if (temps.length === 0) return null;
+
+    const lowTemp = Math.round(Math.min(...temps));
+    const highTemp = Math.round(Math.max(...temps));
+    const rainPercent = rainValues.length > 0 ? Math.round(Math.max(...rainValues)) : 0;
+    const windMph = windValues.length > 0 ? Math.round(Math.max(...windValues)) : null;
+    const tempLabel = lowTemp === highTemp ? `${highTemp}°F` : `${lowTemp}-${highTemp}°F`;
+    const windLabel = windMph == null ? "" : ` • Wind up to ${windMph} mph`;
+    return `5-7 PM forecast: ${tempLabel} • Rain up to ${rainPercent}%${windLabel}`;
   } catch {
     return null;
   }
@@ -210,7 +234,6 @@ async function fetchDashboardWeatherSummary(location: WeatherLocation): Promise<
 
 async function buildDashboardData(player: Player): Promise<{ data: DashboardData | null; error: string | null }> {
   const supabase = await createClient();
-  const fallbackWeatherSummary = await fetchDashboardWeatherSummary(DASHBOARD_WEATHER_LOCATION);
 
   const { data: seasonData, error: seasonError } = await supabase
     .from("seasons")
@@ -230,7 +253,7 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
     return {
       data: {
         playerName: player.full_name,
-        weatherSummary: fallbackWeatherSummary,
+        weatherSummary: null,
         thisWeek: null,
         lastRounds: [],
         seasonSnapshot: null,
@@ -268,7 +291,7 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
     (appStateData as { current_dashboard_week_id: string | null } | null)?.current_dashboard_week_id ?? null;
   const currentWeek =
     (configuredWeekId ? weeks.find((week) => week.id === configuredWeekId) : null) ?? autoResolvedWeek;
-  const weatherSummary = await fetchDashboardWeatherSummary(DASHBOARD_WEATHER_LOCATION);
+  let weatherSummary: string | null = null;
 
   let thisWeek: ThisWeekStatus | null = null;
   const { data: playerCupData, error: playerCupError } = await supabase
@@ -317,6 +340,11 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
       groupNumber = tee?.group_number ?? null;
       teeNotes = tee?.notes ?? null;
     }
+
+    weatherSummary = await fetchDashboardWeatherSummary({
+      location: DASHBOARD_WEATHER_LOCATION,
+      targetDate: currentWeek.play_date ?? currentWeek.week_date,
+    });
 
     thisWeek = {
       weekId: currentWeek.id,
