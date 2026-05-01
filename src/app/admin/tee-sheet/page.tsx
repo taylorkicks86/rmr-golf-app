@@ -123,6 +123,8 @@ export default function AdminTeeSheetPage() {
   const [publishing, setPublishing] = useState(false);
   const [sendingPaidReminder, setSendingPaidReminder] = useState(false);
   const [showPaidReminderConfirm, setShowPaidReminderConfirm] = useState(false);
+  const [sendingTeeSheetEmail, setSendingTeeSheetEmail] = useState(false);
+  const [showTeeSheetEmailConfirm, setShowTeeSheetEmailConfirm] = useState(false);
   const [reminderMessage, setReminderMessage] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
@@ -698,14 +700,50 @@ export default function AdminTeeSheetPage() {
     const total = body?.totalRecipients ?? sent + failed;
     setReminderMessage(
       failed > 0
-        ? `Sent ${sent} of ${total} paid-player RSVP reminders. ${failed} failed.`
+        ? `Sent ${sent} of ${total} RSVP reminders. ${failed} failed.`
         : total === 0
-          ? "No paid players are currently undecided for this week."
-          : `Sent ${sent} paid-player RSVP reminder${sent === 1 ? "" : "s"}.`
+          ? "No players are currently undecided for this week."
+          : `Sent ${sent} RSVP reminder${sent === 1 ? "" : "s"}.`
     );
     setSendingPaidReminder(false);
     setShowPaidReminderConfirm(false);
   }, [selectedWeekId]);
+
+  const sendTeeSheetEmail = useCallback(async () => {
+    if (!selectedWeekId || !isPublished) return;
+
+    setSendingTeeSheetEmail(true);
+    setSaveError(null);
+    setReminderMessage(null);
+
+    const response = await fetch("/api/admin/tee-sheet-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        weekId: selectedWeekId,
+      }),
+    });
+
+    const body = (await response.json().catch(() => null)) as ReminderResponse | null;
+    if (!response.ok) {
+      setSaveError(body?.error ?? "Failed to send tee sheet email.");
+      setSendingTeeSheetEmail(false);
+      return;
+    }
+
+    const sent = body?.sent ?? 0;
+    const failed = body?.failed ?? 0;
+    const total = body?.totalRecipients ?? sent + failed;
+    setReminderMessage(
+      failed > 0
+        ? `Sent ${sent} of ${total} tee sheet emails. ${failed} failed.`
+        : `Sent ${sent} tee sheet email${sent === 1 ? "" : "s"}.`
+    );
+    setSendingTeeSheetEmail(false);
+    setShowTeeSheetEmailConfirm(false);
+  }, [isPublished, selectedWeekId]);
 
   if (loadingWeeks) {
     return (
@@ -846,6 +884,24 @@ export default function AdminTeeSheetPage() {
           </button>
           <button
             type="button"
+            onClick={() => {
+              setSaveError(null);
+              setReminderMessage(null);
+              setShowTeeSheetEmailConfirm(true);
+            }}
+            disabled={
+              !selectedWeekId ||
+              loadingRows ||
+              sendingTeeSheetEmail ||
+              !isPublished ||
+              activePlayers.length === 0
+            }
+            className="rounded-md border border-indigo-600 bg-white px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm transition-colors hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sendingTeeSheetEmail ? "Sending…" : "Email Tee Sheet"}
+          </button>
+          <button
+            type="button"
             onClick={publishTeeSheet}
             disabled={
               !selectedWeekId ||
@@ -965,7 +1021,7 @@ export default function AdminTeeSheetPage() {
                 Send RSVP Reminders
               </h3>
               <p className="mt-1 text-sm text-zinc-600">
-                Send the “are you playing this week” email to paid players who are still undecided?
+                Send the “are you playing this week” email to players who are still undecided?
               </p>
             </div>
             <div className="flex justify-end gap-3 px-5 py-4">
@@ -984,6 +1040,44 @@ export default function AdminTeeSheetPage() {
                 className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
               >
                 {sendingPaidReminder ? "Sending…" : "Yes, Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTeeSheetEmailConfirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tee-sheet-email-title"
+        >
+          <div className="w-full max-w-md rounded-lg border border-emerald-900/20 bg-white shadow-xl">
+            <div className="border-b border-zinc-200 px-5 py-4">
+              <h3 id="tee-sheet-email-title" className="text-lg font-semibold text-zinc-900">
+                Email Tee Sheet
+              </h3>
+              <p className="mt-1 text-sm text-zinc-600">
+                Send the published tee sheet to players marked as playing this week?
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setShowTeeSheetEmailConfirm(false)}
+                disabled={sendingTeeSheetEmail}
+                className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={sendTeeSheetEmail}
+                disabled={sendingTeeSheetEmail}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {sendingTeeSheetEmail ? "Sending…" : "Yes, Send"}
               </button>
             </div>
           </div>
