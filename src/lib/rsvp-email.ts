@@ -30,6 +30,12 @@ type TeeSheetEmailParams = {
   assignments: TeeSheetAssignment[];
 };
 
+type CommissionerEmailParams = {
+  playerName: string;
+  subject: string;
+  message: string;
+};
+
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 14;
 
 function base64UrlEncode(input: string): string {
@@ -276,6 +282,79 @@ export function buildTeeSheetEmail({
                           </td>
                         </tr>
                       </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 18px 20px;background:#f8f7f2;"></td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export function buildCommissionerEmail({
+  playerName,
+  subject,
+  message,
+}: CommissionerEmailParams): string {
+  const paragraphs = message
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => paragraph.split(/\n/).map(escapeHtml).join("<br />"))
+    .map(
+      (paragraph) =>
+        `<p style="margin:0 0 18px;font-size:16px;line-height:26px;color:#30313a;">${paragraph}</p>`
+    )
+    .join("");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;background:#f3f5ef;font-family:Arial,Helvetica,sans-serif;color:#171717;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f5ef;margin:0;padding:24px 10px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;border-collapse:separate;border-spacing:0;background:#f8f7f2;border-radius:8px;overflow:hidden;border:1px solid #d9e2d8;">
+            <tr>
+              <td background="https://rmrgolf.com/images/backgrounds/golf_peak_summer.jpg" style="background-image:linear-gradient(rgba(16,52,39,.68),rgba(16,52,39,.68)),url('https://rmrgolf.com/images/backgrounds/golf_peak_summer.jpg');background-size:cover;background-position:center;padding:26px 22px 84px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding:0 0 46px;">
+                      <img src="https://rmrgolf.com/rmr-logo.png" width="72" alt="RMR Golf" style="display:block;width:72px;height:auto;border:0;" />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <div style="font-size:12px;line-height:18px;letter-spacing:4px;text-transform:uppercase;color:#d7fff2;font-weight:800;">RMR Golf League</div>
+                      <h1 style="margin:12px 0 0;font-size:36px;line-height:42px;color:#ffffff;font-weight:800;letter-spacing:0;">${escapeHtml(subject)}</h1>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 18px 24px;background:#f8f7f2;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:-44px;border-collapse:separate;border-spacing:0;border:1px solid rgba(29,57,47,.2);background:#fffdf7;border-radius:8px;overflow:hidden;box-shadow:0 8px 20px rgba(15,23,42,.16);">
+                  <tr>
+                    <td style="border-bottom:1px solid rgba(6,30,22,.35);background:#1d392f;padding:14px 16px;">
+                      <h2 style="margin:0;font-size:22px;line-height:28px;color:#ffffff;font-weight:800;">League Commissioner</h2>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:22px 18px 8px;">
+                      <p style="margin:0 0 18px;font-size:16px;line-height:26px;color:#30313a;">Hi ${escapeHtml(playerName)},</p>
+                      ${paragraphs}
                     </td>
                   </tr>
                 </table>

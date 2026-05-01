@@ -42,6 +42,12 @@ export default function AdminPage() {
             Tee Sheet →
           </Link>
           <Link
+            href="/admin/email-groups"
+            className="text-emerald-100 hover:text-white hover:underline"
+          >
+            Email Group →
+          </Link>
+          <Link
             href="/admin/finalize-week"
             className="text-emerald-100 hover:text-white hover:underline"
           >

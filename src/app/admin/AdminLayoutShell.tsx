@@ -38,6 +38,10 @@ const ADMIN_HERO_META: Record<string, { title: string; subtitle: string }> = {
     title: "Tee Sheet",
     subtitle: "Assign tee times and groups for the selected week.",
   },
+  "/admin/email-groups": {
+    title: "Email Group",
+    subtitle: "Send commissioner messages to league members.",
+  },
   "/admin/finalize-week": {
     title: "Finalize Week",
     subtitle: "Review results and publish finalized weekly outcomes.",
