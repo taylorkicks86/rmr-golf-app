@@ -168,8 +168,9 @@ async function fetchDashboardWeatherSummary({
       latitude: String(location.latitude),
       longitude: String(location.longitude),
       temperature_unit: "fahrenheit",
+      precipitation_unit: "inch",
       wind_speed_unit: "mph",
-      hourly: "temperature_2m,precipitation_probability,wind_speed_10m",
+      hourly: "temperature_2m,precipitation_probability,precipitation,wind_speed_10m",
       timezone: "America/New_York",
     });
 
@@ -192,6 +193,7 @@ async function fetchDashboardWeatherSummary({
         time?: string[];
         temperature_2m?: Array<number | null>;
         precipitation_probability?: Array<number | null>;
+        precipitation?: Array<number | null>;
         wind_speed_10m?: Array<number | null>;
       };
     };
@@ -199,6 +201,7 @@ async function fetchDashboardWeatherSummary({
     const hourlyTimes = data.hourly?.time ?? [];
     const hourlyTemps = data.hourly?.temperature_2m ?? [];
     const hourlyRain = data.hourly?.precipitation_probability ?? [];
+    const hourlyPrecipitation = data.hourly?.precipitation ?? [];
     const hourlyWind = data.hourly?.wind_speed_10m ?? [];
     if (hourlyTimes.length === 0 || hourlyTemps.length === 0) {
       return null;
@@ -217,16 +220,20 @@ async function fetchDashboardWeatherSummary({
 
     const temps = windowIndexes.map((index) => Number(hourlyTemps[index])).filter(Number.isFinite);
     const rainValues = windowIndexes.map((index) => Number(hourlyRain[index] ?? 0)).filter(Number.isFinite);
+    const precipitationValues = windowIndexes
+      .map((index) => Number(hourlyPrecipitation[index] ?? 0))
+      .filter(Number.isFinite);
     const windValues = windowIndexes.map((index) => Number(hourlyWind[index] ?? 0)).filter(Number.isFinite);
     if (temps.length === 0) return null;
 
     const lowTemp = Math.round(Math.min(...temps));
     const highTemp = Math.round(Math.max(...temps));
     const rainPercent = rainValues.length > 0 ? Math.round(Math.max(...rainValues)) : 0;
+    const rainTotal = precipitationValues.reduce((total, value) => total + value, 0);
     const windMph = windValues.length > 0 ? Math.round(Math.max(...windValues)) : null;
     const tempLabel = lowTemp === highTemp ? `${highTemp}°F` : `${lowTemp}-${highTemp}°F`;
-    const windLabel = windMph == null ? "" : ` • Wind up to ${windMph} mph`;
-    return `5-7 PM forecast: ${tempLabel} • Rain up to ${rainPercent}%${windLabel}`;
+    const windLabel = windMph == null ? "" : ` • Wind ${windMph} mph`;
+    return `5-7 PM forecast: ${tempLabel} • Rain ${rainPercent}% ${rainTotal.toFixed(1)}"${windLabel}`;
   } catch {
     return null;
   }
