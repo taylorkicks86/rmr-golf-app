@@ -54,6 +54,12 @@ export default function AdminPage() {
             Finalize Week →
           </Link>
           <Link
+            href="/admin/scoring-settings"
+            className="text-emerald-100 hover:text-white hover:underline"
+          >
+            Scoring Settings →
+          </Link>
+          <Link
             href="/admin/dashboard-week"
             className="text-emerald-100 hover:text-white hover:underline"
           >

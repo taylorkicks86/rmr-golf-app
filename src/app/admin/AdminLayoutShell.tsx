@@ -46,6 +46,10 @@ const ADMIN_HERO_META: Record<string, { title: string; subtitle: string }> = {
     title: "Finalize Week",
     subtitle: "Review results and publish finalized weekly outcomes.",
   },
+  "/admin/scoring-settings": {
+    title: "Scoring Settings",
+    subtitle: "Adjust Cup point values and scoring positions.",
+  },
   "/admin/dashboard-week": {
     title: "Dashboard Week",
     subtitle: "Set the active week shown on player dashboards.",

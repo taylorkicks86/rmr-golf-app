@@ -7,6 +7,11 @@ import { AdminSeasonSelector } from "@/components/admin/AdminSeasonSelector";
 import { createClient } from "@/lib/supabase/client";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
 import {
+  DEFAULT_CUP_SCORING_SETTINGS,
+  type CupScoringSettings,
+  normalizeCupScoringSettings,
+} from "@/lib/cup-scoring";
+import {
   computeWeeklyCupResults,
 } from "@/lib/cup-weekly-points";
 
@@ -187,6 +192,7 @@ export default function AdminFinalizeWeekPage() {
   const [saving, setSaving] = useState(false);
   const [loadingCup, setLoadingCup] = useState(false);
   const [cupRows, setCupRows] = useState<CupResultRow[]>([]);
+  const [cupScoringSettings, setCupScoringSettings] = useState<CupScoringSettings>(DEFAULT_CUP_SCORING_SETTINGS);
 
   const loadWeeksForSeason = useCallback(async (seasonId: string) => {
     if (!seasonId) {
@@ -260,6 +266,32 @@ export default function AdminFinalizeWeekPage() {
     () => weeks.find((week) => week.id === selectedWeekId) ?? null,
     [weeks, selectedWeekId]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadScoringSettings() {
+      if (!selectedWeek?.season_id) {
+        setCupScoringSettings(DEFAULT_CUP_SCORING_SETTINGS);
+        return;
+      }
+
+      const response = await fetch(
+        `/api/admin/scoring-settings?seasonId=${encodeURIComponent(selectedWeek.season_id)}`
+      );
+      const body = (await response.json().catch(() => null)) as Partial<CupScoringSettings> | { error?: string } | null;
+      if (!isMounted) return;
+      setCupScoringSettings(
+        response.ok ? normalizeCupScoringSettings(body as Partial<CupScoringSettings>) : DEFAULT_CUP_SCORING_SETTINGS
+      );
+    }
+
+    loadScoringSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedWeek?.season_id]);
+
   const loadSummary = useCallback(() => {
     if (!selectedWeekId) {
       setSummary(null);
@@ -463,6 +495,7 @@ export default function AdminFinalizeWeekPage() {
           scores: scores.map((score) => ({ player_id: score.player_id, gross_score: score.gross_score })),
           teamMembers: members,
           scoringPlayerIds: officialScorerIds,
+          scoringSettings: cupScoringSettings,
         });
         const rowsSource = selectedWeek.is_finalized
           ? cupResults.map((row) => ({
@@ -592,7 +625,7 @@ export default function AdminFinalizeWeekPage() {
         setLoadingCup(false);
       }
     );
-  }, [selectedWeekId, selectedWeek]);
+  }, [cupScoringSettings, selectedWeekId, selectedWeek]);
 
   useEffect(() => {
     loadCupResults();
@@ -731,6 +764,7 @@ export default function AdminFinalizeWeekPage() {
       scores,
       teamMembers: members,
       scoringPlayerIds: officialScorerIds,
+      scoringSettings: cupScoringSettings,
     });
 
     if (traceTeam) {
@@ -831,7 +865,7 @@ export default function AdminFinalizeWeekPage() {
       )
     );
     setSaving(false);
-  }, [selectedWeekId, selectedWeek]);
+  }, [cupScoringSettings, selectedWeekId, selectedWeek]);
 
   const unfinalizeWeek = useCallback(async () => {
     if (!selectedWeekId || !selectedWeek || !selectedWeek.is_finalized) {

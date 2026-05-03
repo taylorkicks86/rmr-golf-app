@@ -1,4 +1,9 @@
-import { CUP_TEAM_COUNT, pointsForCupPosition } from "@/lib/cup-scoring";
+import {
+  DEFAULT_CUP_SCORING_SETTINGS,
+  type CupScoringSettings,
+  normalizeCupScoringSettings,
+  pointsForCupPosition,
+} from "@/lib/cup-scoring";
 
 export type CupEligiblePlayer = {
   id: string;
@@ -37,8 +42,10 @@ export function computeWeeklyCupResults(params: {
   scores: WeeklyGrossScore[];
   teamMembers: CupTeamMembership[];
   scoringPlayerIds?: string[];
+  scoringSettings?: CupScoringSettings;
 }): WeeklyCupResultRow[] {
   const { players, participation, scores, teamMembers, scoringPlayerIds } = params;
+  const scoringSettings = normalizeCupScoringSettings(params.scoringSettings ?? DEFAULT_CUP_SCORING_SETTINGS);
 
   const eligiblePlayers = players.filter((player) => player.cup);
   const eligibleIds = new Set(eligiblePlayers.map((player) => player.id));
@@ -164,7 +171,7 @@ export function computeWeeklyCupResults(params: {
 
   let positionCursor = 1;
   let index = 0;
-  while (index < rankedTeams.length && positionCursor <= CUP_TEAM_COUNT) {
+  while (index < rankedTeams.length) {
     const net = rankedTeams[index]?.net;
     const tieGroup: typeof rankedTeams = [];
     while (index < rankedTeams.length && rankedTeams[index]?.net === net) {
@@ -172,13 +179,11 @@ export function computeWeeklyCupResults(params: {
       index += 1;
     }
 
-    const slotPositions = Array.from({ length: tieGroup.length }, (_, offset) => positionCursor + offset).filter(
-      (position) => position <= CUP_TEAM_COUNT
+    const slotPositions = Array.from({ length: tieGroup.length }, (_, offset) => positionCursor + offset);
+    const slotPoints = slotPositions.reduce(
+      (sum, position) => sum + pointsForCupPosition(position, scoringSettings),
+      0
     );
-    const slotPoints =
-      slotPositions.length > 0
-        ? slotPositions.reduce((sum, position) => sum + pointsForCupPosition(position), 0)
-        : 0;
     const sharedPoints = slotPositions.length > 0 ? Number((slotPoints / slotPositions.length).toFixed(2)) : 0;
 
     tieGroup.forEach((team) => {
@@ -188,15 +193,22 @@ export function computeWeeklyCupResults(params: {
       });
     });
 
-    slotPositions.forEach((position) => occupiedPositions.add(position));
+    slotPositions.forEach((position) => {
+      if (position <= scoringSettings.scoringPositions) {
+        occupiedPositions.add(position);
+      }
+    });
     positionCursor += tieGroup.length;
   }
 
   const dnpTeamIds = teamIds.filter((teamId) => !pointsByTeamId.has(teamId));
-  const vacantPositions = Array.from({ length: CUP_TEAM_COUNT }, (_, idx) => idx + 1).filter(
+  const vacantPositions = Array.from({ length: scoringSettings.scoringPositions }, (_, idx) => idx + 1).filter(
     (position) => !occupiedPositions.has(position)
   );
-  const vacantPointsTotal = vacantPositions.reduce((sum, position) => sum + pointsForCupPosition(position), 0);
+  const vacantPointsTotal = vacantPositions.reduce(
+    (sum, position) => sum + pointsForCupPosition(position, scoringSettings),
+    0
+  );
   const dnpPoints =
     dnpTeamIds.length > 0 ? Number((vacantPointsTotal / dnpTeamIds.length).toFixed(2)) : 0;
 
