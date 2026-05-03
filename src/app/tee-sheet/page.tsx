@@ -379,7 +379,9 @@ export default function PublicTeeSheetPage() {
           <>
             <section className={`${cardClass} mb-6`}>
               <div className={cardHeaderClass}>
-                <h2 className="text-lg font-semibold text-white sm:text-xl">Unassigned Players</h2>
+                <h2 className="text-lg font-semibold text-white sm:text-xl">
+                  Unassigned Players ({unassignedPlayers.length})
+                </h2>
               </div>
               <div className={cardBodyClass}>
                 {loadingRows ? (
@@ -406,7 +408,9 @@ export default function PublicTeeSheetPage() {
 
             <section className={cardClass}>
               <div className={cardHeaderClass}>
-                <h2 className="text-lg font-semibold text-white sm:text-xl">Marked No</h2>
+                <h2 className="text-lg font-semibold text-white sm:text-xl">
+                  Marked No ({notPlayingPlayers.length})
+                </h2>
               </div>
               <div className={cardBodyClass}>
                 {loadingRows ? (
