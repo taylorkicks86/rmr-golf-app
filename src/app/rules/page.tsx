@@ -26,10 +26,10 @@ const RULE_SECTIONS: RuleSection[] = [
       "$150 per team/solo player",
       "",
       "Regular Season Payout:",
-      "$800 to 1st, $350 to 2nd, $150 to 3rd",
+      "$750 to 1st, $300 to 2nd, $150 to 3rd",
       "",
       "Playoff Payout:",
-      "$150 to 1st + $50 trophy",
+      "$100 to 1st + $50 trophy",
     ],
   },
   {
@@ -37,7 +37,7 @@ const RULE_SECTIONS: RuleSection[] = [
     lines: [
       "85% Handicap Allowance and the USGA GHIN Handicap Calculator will determine your weekly Playing Handicap.",
       "",
-      "Scores for each round must be posted in the Teams chat no later than the Monday following the round.",
+      "Scores for each round should be posted directly on www.rmrgolf.com no later than the Monday following the round.",
     ],
   },
   {
@@ -49,7 +49,18 @@ const RULE_SECTIONS: RuleSection[] = [
       "",
       "After the third rain-out/cancel, we will reduce this to the best 8 weeks. No further reductions will apply.",
       "",
-      "Players receive points regardless of attendance (no fill-ins). Players who do not attend a given week will split the vacant position points (e.g. if 3 players do not attend, they will split the total points for 8 through 10 – 150 points each).",
+      "Players receive points regardless of attendance (no fill-ins). Players who do not attend a given week will split the vacant position points (e.g. if 3 players do not attend, they will split the total points for 7 through 9 – 200 points each).",
+      "",
+      "Leaderboard Points:",
+      "1st - 750",
+      "2nd - 600",
+      "3rd - 475",
+      "4th - 400",
+      "5th - 350",
+      "6th - 300",
+      "7th - 250",
+      "8th - 200",
+      "9th - 150",
     ],
   },
   {
@@ -67,7 +78,7 @@ const RULE_SECTIONS: RuleSection[] = [
   {
     title: "Lift, Clean, Play",
     lines: [
-      "Ball in the fairway or rough (not bunker or hazard) may be picked up, cleaned, and placed back in its same spot with no penalty at any time. Balls may be moved out of divots, no closer to the hole.",
+      "Ball in fairway (not rough, bunker or hazard) may be picked up, cleaned, and placed back in its same spot with no penalty at any time. Balls may always be moved out of fairway divots, no closer to the hole.",
     ],
   },
   {
@@ -117,7 +128,7 @@ const RULE_SECTIONS: RuleSection[] = [
   {
     title: "Wrong Ball",
     lines: [
-      "Two-stroke penalty for playing the wrong ball. If an opponent’s in-play ball, opponent gets free drop in original spot, no closer to the hole.",
+      "Two-stroke penalty for playing the wrong ball. If you hit an opponent’s in-play ball, opponent gets free drop in original spot, no closer to the hole.",
     ],
   },
   {
