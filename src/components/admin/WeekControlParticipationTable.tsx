@@ -208,7 +208,7 @@ export function WeekControlParticipationTable({
   const onPlayingChange = useCallback(
     (row: Row, checked: boolean) => {
       if (isFinalized) return;
-      persist(row, checked, checked ? row.cup : false);
+      persist(row, checked, checked ? row.player.cup : false);
     },
     [isFinalized, persist]
   );

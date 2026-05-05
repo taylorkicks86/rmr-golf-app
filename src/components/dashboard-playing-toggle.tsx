@@ -72,7 +72,7 @@ export function DashboardPlayingToggle({
   };
 
   const updatePlaying = (nextValue: boolean | null) => {
-    const nextCup = nextValue === true && cupEligible ? cup : false;
+    const nextCup = nextValue === true && cupEligible ? true : false;
     void persist(nextValue, nextCup);
   };
 
