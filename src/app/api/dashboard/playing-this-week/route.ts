@@ -105,7 +105,7 @@ export async function PUT(request: NextRequest) {
   );
 
   const isCupPlayer = Boolean((playerData as { cup: boolean }).cup);
-  if (body.playingThisWeek === true && isCupPlayer) {
+  if (body.playingThisWeek === true && isCupPlayer && body.cup === true) {
     const conflictCheck = await getCupTeamPlayingConflict({
       supabase: serviceSupabase,
       leagueWeekId: body.weekId,

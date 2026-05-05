@@ -130,7 +130,7 @@ export function WeekControlParticipationTable({
       setSavingPlayerId(row.player.id);
       const supabase = createClient();
 
-      if (nextPlaying === true && row.player.cup) {
+      if (nextPlaying === true && row.player.cup && nextCup === true) {
         const conflictCheck = await getCupTeamPlayingConflict({
           supabase,
           leagueWeekId: selectedWeekId,

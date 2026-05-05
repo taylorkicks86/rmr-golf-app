@@ -63,7 +63,7 @@ export async function getCupTeamPlayingConflict(params: {
 
   const { data: teammateParticipationData, error: teammateParticipationError } = await supabase
     .from("weekly_participation")
-    .select("player_id, playing_this_week, attendance_status")
+    .select("player_id, playing_this_week, attendance_status, cup")
     .eq("league_week_id", leagueWeekId)
     .in("player_id", teammateIds);
 
@@ -73,9 +73,9 @@ export async function getCupTeamPlayingConflict(params: {
 
   const hasTeammatePlaying = (
     (teammateParticipationData as
-      | { player_id: string; playing_this_week: boolean | null; attendance_status: string | null }[]
+      | { player_id: string; playing_this_week: boolean | null; attendance_status: string | null; cup: boolean | null }[]
       | null) ?? []
-  ).some((row) => row.playing_this_week === true || row.attendance_status === "playing");
+  ).some((row) => row.cup === true && (row.playing_this_week === true || row.attendance_status === "playing"));
 
   return { hasConflict: hasTeammatePlaying, error: null };
 }
