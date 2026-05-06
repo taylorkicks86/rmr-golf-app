@@ -111,6 +111,7 @@ export async function PUT(request: NextRequest) {
   );
 
   const isCupPlayer = Boolean((playerData as { cup: boolean }).cup);
+  let persistedCup = isCupPlayer && body.playingThisWeek === true;
   if (body.playingThisWeek === true && isCupPlayer) {
     const conflictCheck = await getCupTeamPlayingConflict({
       supabase: serviceSupabase,
@@ -121,16 +122,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: conflictCheck.error }, { status: 500 });
     }
     if (conflictCheck.hasConflict) {
-      return NextResponse.json(
-        { error: "Only one member of a 2-player Cup team can be marked playing for this week." },
-        { status: 400 }
-      );
+      persistedCup = false;
     }
   }
 
   const attendanceStatus =
     body.playingThisWeek === true ? "playing" : body.playingThisWeek === false ? "not_playing" : "no_response";
-  const persistedCup = isCupPlayer && body.playingThisWeek === true;
 
   const { data: upserted, error: upsertError } = await serviceSupabase
     .from("weekly_participation")

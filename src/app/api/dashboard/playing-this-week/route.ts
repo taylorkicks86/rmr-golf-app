@@ -9,6 +9,7 @@ type UpdateBody = {
   weekId: string;
   playingThisWeek: boolean | null;
   cup: boolean;
+  cupDefaulted?: boolean;
 };
 
 export async function PUT(request: NextRequest) {
@@ -105,6 +106,7 @@ export async function PUT(request: NextRequest) {
   );
 
   const isCupPlayer = Boolean((playerData as { cup: boolean }).cup);
+  let persistedCup = isCupPlayer && body.playingThisWeek === true ? body.cup : false;
   if (body.playingThisWeek === true && isCupPlayer && body.cup === true) {
     const conflictCheck = await getCupTeamPlayingConflict({
       supabase: serviceSupabase,
@@ -115,14 +117,17 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: conflictCheck.error }, { status: 500 });
     }
     if (conflictCheck.hasConflict) {
-      return NextResponse.json(
-        { error: "Only one member of a 2-player Cup team can be marked playing for this week." },
-        { status: 400 }
-      );
+      if (body.cupDefaulted === true) {
+        persistedCup = false;
+      } else {
+        return NextResponse.json(
+          { error: "Only one member of a 2-player Cup team can be marked playing for this week." },
+          { status: 400 }
+        );
+      }
     }
   }
 
-  const persistedCup = isCupPlayer && body.playingThisWeek === true ? body.cup : false;
   const attendanceStatus =
     body.playingThisWeek === true ? "playing" : body.playingThisWeek === false ? "not_playing" : "no_response";
 

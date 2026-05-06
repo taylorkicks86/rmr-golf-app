@@ -30,7 +30,7 @@ export function DashboardPlayingToggle({
     setCup(initialCup);
   }, [initialPlayingThisWeek, initialCup]);
 
-  const persist = async (nextPlayingThisWeek: boolean | null, nextCup: boolean) => {
+  const persist = async (nextPlayingThisWeek: boolean | null, nextCup: boolean, options?: { cupDefaulted?: boolean }) => {
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -44,6 +44,7 @@ export function DashboardPlayingToggle({
         weekId,
         playingThisWeek: nextPlayingThisWeek,
         cup: nextCup,
+        cupDefaulted: options?.cupDefaulted === true,
       }),
     });
 
@@ -73,7 +74,7 @@ export function DashboardPlayingToggle({
 
   const updatePlaying = (nextValue: boolean | null) => {
     const nextCup = nextValue === true && cupEligible ? true : false;
-    void persist(nextValue, nextCup);
+    void persist(nextValue, nextCup, { cupDefaulted: nextCup });
   };
 
   const updateCup = (nextValue: boolean) => {

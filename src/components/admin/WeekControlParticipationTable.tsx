@@ -123,12 +123,13 @@ export function WeekControlParticipationTable({
   }, [loadData]);
 
   const persist = useCallback(
-    async (row: Row, nextPlaying: boolean | null, nextCup: boolean) => {
+    async (row: Row, nextPlaying: boolean | null, nextCup: boolean, options?: { allowCupFallback?: boolean }) => {
       if (isFinalized || !selectedWeekId) return;
 
       setSaveError(null);
       setSavingPlayerId(row.player.id);
       const supabase = createClient();
+      let resolvedCup = nextCup;
 
       if (nextPlaying === true && row.player.cup && nextCup === true) {
         const conflictCheck = await getCupTeamPlayingConflict({
@@ -142,16 +143,20 @@ export function WeekControlParticipationTable({
           return;
         }
         if (conflictCheck.hasConflict) {
-          setSaveError("Only one member of a 2-player Cup team can be marked playing for this week.");
-          setSavingPlayerId(null);
-          loadData();
-          return;
+          if (options?.allowCupFallback) {
+            resolvedCup = false;
+          } else {
+            setSaveError("Only one member of a 2-player Cup team can be marked playing for this week.");
+            setSavingPlayerId(null);
+            loadData();
+            return;
+          }
         }
       }
 
       const attendanceStatus =
         nextPlaying === true ? "playing" : nextPlaying === false ? "not_playing" : "no_response";
-      const enforcedCup = row.player.cup && nextPlaying === true ? nextCup : false;
+      const enforcedCup = row.player.cup && nextPlaying === true ? resolvedCup : false;
       if (row.participation) {
         const { error: updateError } = await supabase
           .from("weekly_participation")
@@ -208,7 +213,7 @@ export function WeekControlParticipationTable({
   const onPlayingChange = useCallback(
     (row: Row, checked: boolean) => {
       if (isFinalized) return;
-      persist(row, checked, checked ? row.player.cup : false);
+      persist(row, checked, checked ? row.player.cup : false, { allowCupFallback: true });
     },
     [isFinalized, persist]
   );
