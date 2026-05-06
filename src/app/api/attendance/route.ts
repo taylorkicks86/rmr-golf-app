@@ -130,7 +130,7 @@ export async function PUT(request: NextRequest) {
 
   const attendanceStatus =
     body.playingThisWeek === true ? "playing" : body.playingThisWeek === false ? "not_playing" : "no_response";
-  const persistedCup = isCupPlayer;
+  const persistedCup = isCupPlayer && body.playingThisWeek === true;
 
   const { data: upserted, error: upsertError } = await serviceSupabase
     .from("weekly_participation")
