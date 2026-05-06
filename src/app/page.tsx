@@ -30,6 +30,7 @@ type LeagueWeek = {
   course_config_id: string | null;
   week_type: "regular" | "playoff";
   status: "open" | "finalized" | "cancelled" | "rained_out";
+  tee_sheet_published: boolean;
 };
 
 type WeeklyParticipation = {
@@ -73,6 +74,7 @@ type ThisWeekStatus = {
   teeTime: string | null;
   groupNumber: number | null;
   teeNotes: string | null;
+  teeSheetPublished: boolean;
   isFinalized: boolean;
 };
 
@@ -271,7 +273,7 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
 
   const { data: weeksData, error: weeksError } = await supabase
     .from("league_weeks")
-    .select("id, week_number, week_date, play_date, is_finalized, side_to_play, course_config_id, week_type, status")
+    .select("id, week_number, week_date, play_date, is_finalized, side_to_play, course_config_id, week_type, status, tee_sheet_published")
     .eq("season_id", season.id)
     .order("week_number", { ascending: true });
 
@@ -330,7 +332,7 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
     let groupNumber: number | null = null;
     let teeNotes: string | null = null;
 
-    if (participation?.playing_this_week) {
+    if (participation?.playing_this_week && currentWeek.tee_sheet_published) {
       const { data: teeTimeData, error: teeTimeError } = await supabase
         .from("weekly_tee_times")
         .select("tee_time, group_number, notes")
@@ -365,6 +367,7 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
       teeTime,
       groupNumber,
       teeNotes,
+      teeSheetPublished: currentWeek.tee_sheet_published,
       isFinalized: currentWeek.is_finalized,
     };
   }
