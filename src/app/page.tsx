@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { DashboardPlayingToggle } from "@/components/dashboard-playing-toggle";
+import { DashboardLastRounds } from "@/components/dashboard-last-rounds";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { computeCupSeasonStandings } from "@/lib/cup-standings";
 import { resolvePlayerProfileForUser } from "@/lib/player-profile";
@@ -692,33 +693,7 @@ export default async function Home() {
               <h2 className="text-lg font-semibold text-white sm:text-xl">Last Rounds</h2>
             </div>
             <div className={cardBodyClass}>
-              {dashboardData.lastRounds.length === 0 ? (
-                <p className="text-sm text-zinc-600">No finalized rounds available yet.</p>
-              ) : (
-                <div className="overflow-hidden rounded-md border border-emerald-900/15 bg-white/75">
-                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 border-b border-emerald-900/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                    <span>Date</span>
-                    <span className="text-right">Side</span>
-                    <span className="text-right">Net</span>
-                    <span className="text-right">Gross</span>
-                  </div>
-                  <div className="divide-y divide-emerald-900/10">
-                    {dashboardData.lastRounds.map((round) => (
-                      <div
-                        key={round.weekId}
-                        className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-2 px-3 py-2 text-sm text-zinc-700"
-                      >
-                        <span className="font-medium text-zinc-900">{round.dateLabel}</span>
-                        <span className="text-right text-xs font-medium text-zinc-600">
-                          {round.sideToPlay === "back" ? "Back 9" : "Front 9"}
-                        </span>
-                        <span className="text-right font-medium text-zinc-900">{round.net}</span>
-                        <span className="text-right font-medium text-zinc-900">{round.gross}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              <DashboardLastRounds playerId={player.id} rounds={dashboardData.lastRounds} />
             </div>
           </section>
 
