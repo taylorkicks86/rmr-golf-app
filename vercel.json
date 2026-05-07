@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/ghin-sync",
+      "schedule": "0 10 * * 2"
+    }
+  ]
+}

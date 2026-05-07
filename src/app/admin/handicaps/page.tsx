@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSeasonSelector } from "@/components/admin/AdminSeasonSelector";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
 import { createClient } from "@/lib/supabase/client";
-import { computeFinalComputedHandicap } from "@/lib/weekly-handicap";
+import { computeFinalComputedHandicap, computeNineHoleCourseHandicap } from "@/lib/weekly-handicap";
 
 type Season = {
   id: string;
@@ -19,7 +19,9 @@ type LeagueWeek = {
   id: string;
   week_number: number;
   week_date: string;
+  play_date: string | null;
   is_finalized: boolean;
+  side_to_play: "front" | "back";
 };
 
 type Player = {
@@ -42,6 +44,22 @@ type LeagueWeekSettingsRecord = {
   league_handicap_percent: number;
 };
 
+type CourseConfigRecord = {
+  id: string;
+  front_rating: number | null;
+  front_slope: number | null;
+  front_par: number | null;
+  back_rating: number | null;
+  back_slope: number | null;
+  back_par: number | null;
+};
+
+type NineHoleCourseValues = {
+  rating: number | null;
+  slope: number | null;
+  par: number | null;
+};
+
 type Row = {
   playerId: string;
   playerName: string;
@@ -49,6 +67,26 @@ type Row = {
   profileHandicapIndex: number;
   courseHandicap: string;
   finalComputedHandicap: number;
+};
+
+type GhinSyncResponse = {
+  success?: boolean;
+  total?: number;
+  updated?: number;
+  unchanged?: number;
+  failed?: number;
+  error?: string;
+  results?: GhinSyncResult[];
+};
+
+type GhinSyncResult = {
+  playerId: string;
+  playerName: string;
+  ghin: string;
+  status: "updated" | "unchanged" | "failed";
+  previousHandicapIndex?: number;
+  handicapIndex?: number;
+  message?: string;
 };
 
 function formatNumber(value: number): string {
@@ -69,6 +107,27 @@ function isWholeNumberString(raw: string): boolean {
   return /^-?\d*$/.test(raw.trim());
 }
 
+function formatSideToPlay(side: LeagueWeek["side_to_play"]): string {
+  return side === "back" ? "Back 9" : "Front 9";
+}
+
+function getCourseValuesForSide(
+  side: LeagueWeek["side_to_play"],
+  course: CourseConfigRecord | null
+): NineHoleCourseValues {
+  return side === "back"
+    ? {
+        rating: course?.back_rating ?? null,
+        slope: course?.back_slope ?? null,
+        par: course?.back_par ?? null,
+      }
+    : {
+        rating: course?.front_rating ?? null,
+        slope: course?.front_slope ?? null,
+        par: course?.front_par ?? null,
+      };
+}
+
 function recalculateRowFinal(row: Row, leagueHandicapPercent: number): Row {
   const courseHandicap = parseInputNumber(row.courseHandicap) ?? 0;
   return {
@@ -86,14 +145,22 @@ export default function AdminHandicapsPage() {
   const [weeks, setWeeks] = useState<LeagueWeek[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState<string>("");
   const [rows, setRows] = useState<Row[]>([]);
+  const [selectedCourseValues, setSelectedCourseValues] = useState<NineHoleCourseValues>({
+    rating: null,
+    slope: null,
+    par: null,
+  });
   const [leagueHandicapPercent, setLeagueHandicapPercent] = useState<string>("80");
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncingGhin, setSyncingGhin] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [syncResults, setSyncResults] = useState<GhinSyncResult[]>([]);
 
   const loadWeeksForSeason = useCallback(async (seasonId: string) => {
     if (!seasonId) {
@@ -107,7 +174,7 @@ export default function AdminHandicapsPage() {
     setLoadingWeeks(true);
     const { data, error: err } = await supabase
       .from("league_weeks")
-      .select("id, week_number, week_date, is_finalized")
+      .select("id, week_number, week_date, play_date, is_finalized, side_to_play")
       .eq("season_id", seasonId)
       .order("week_number", { ascending: true });
 
@@ -167,6 +234,7 @@ export default function AdminHandicapsPage() {
   const loadRows = useCallback(() => {
     if (!selectedWeekId) {
       setRows([]);
+      setSelectedCourseValues({ rating: null, slope: null, par: null });
       setLeagueHandicapPercent("80");
       setDirty(false);
       setSaveError(null);
@@ -222,7 +290,7 @@ export default function AdminHandicapsPage() {
 
       const selectedWeekMetaRes = await supabase
         .from("league_weeks")
-        .select("season_id, week_number")
+        .select("season_id, week_number, side_to_play, course_config_id")
         .eq("id", selectedWeekId)
         .maybeSingle();
 
@@ -233,7 +301,13 @@ export default function AdminHandicapsPage() {
         return;
       }
 
-      const selectedWeekMeta = (selectedWeekMetaRes.data as { season_id: string; week_number: number } | null) ?? null;
+      const selectedWeekMeta =
+        (selectedWeekMetaRes.data as {
+          season_id: string;
+          week_number: number;
+          side_to_play: LeagueWeek["side_to_play"];
+          course_config_id: string | null;
+        } | null) ?? null;
       let priorWeekId: string | null = null;
 
       if (selectedWeekMeta?.season_id && Number.isFinite(selectedWeekMeta.week_number)) {
@@ -295,7 +369,48 @@ export default function AdminHandicapsPage() {
           );
       }
 
-      const [playersRes, weeklyHandicapsRes, priorHandicapsRes] = await Promise.all([
+      let courseConfig: CourseConfigRecord | null = null;
+      if (selectedWeekMeta?.course_config_id) {
+        const { data: courseData, error: courseError } = await supabase
+          .from("course_configs")
+          .select("id, front_rating, front_slope, front_par, back_rating, back_slope, back_par")
+          .eq("id", selectedWeekMeta.course_config_id)
+          .maybeSingle();
+
+        if (courseError) {
+          setError(courseError.message);
+          setRows([]);
+          setLoadingRows(false);
+          return;
+        }
+
+        courseConfig = (courseData as CourseConfigRecord | null) ?? null;
+      }
+
+      if (!courseConfig) {
+        const { data: defaultCourseData, error: defaultCourseError } = await supabase
+          .from("course_configs")
+          .select("id, front_rating, front_slope, front_par, back_rating, back_slope, back_par")
+          .eq("is_default", true)
+          .maybeSingle();
+
+        if (defaultCourseError) {
+          setError(defaultCourseError.message);
+          setRows([]);
+          setLoadingRows(false);
+          return;
+        }
+
+        courseConfig = (defaultCourseData as CourseConfigRecord | null) ?? null;
+      }
+
+      const sideCourseValues = getCourseValuesForSide(
+        selectedWeekMeta?.side_to_play ?? "front",
+        courseConfig
+      );
+      setSelectedCourseValues(sideCourseValues);
+
+      const [playersRes, weeklyHandicapsRes] = await Promise.all([
         supabase
           .from("players")
           .select("id, full_name, handicap_index")
@@ -306,13 +421,6 @@ export default function AdminHandicapsPage() {
           .select("player_id, course_handicap, final_computed_handicap")
           .eq("league_week_id", selectedWeekId)
           .in("player_id", activePlayerIds),
-        priorWeekId
-          ? supabase
-              .from("weekly_handicaps")
-              .select("player_id, course_handicap, final_computed_handicap")
-              .eq("league_week_id", priorWeekId)
-              .in("player_id", activePlayerIds)
-          : Promise.resolve({ data: [], error: null }),
       ]);
 
       if (playersRes.error) {
@@ -328,24 +436,11 @@ export default function AdminHandicapsPage() {
         setLoadingRows(false);
         return;
       }
-      if (priorHandicapsRes.error) {
-        setError(priorHandicapsRes.error.message);
-        setRows([]);
-        setLoadingRows(false);
-        return;
-      }
-
       const players = (playersRes.data as Player[]) ?? [];
       const weeklyHandicaps =
         (weeklyHandicapsRes.data as WeeklyHandicapRecord[] | null) ?? [];
       const weeklyByPlayerId = new Map(
         weeklyHandicaps.map((entry) => [entry.player_id, entry])
-      );
-      const priorByPlayerId = new Map(
-        (((priorHandicapsRes.data as WeeklyHandicapRecord[] | null) ?? []).map((entry) => [
-          entry.player_id,
-          entry,
-        ]))
       );
 
       const seedPayload: Array<{
@@ -358,10 +453,12 @@ export default function AdminHandicapsPage() {
 
       const nextRows = players.map((player) => {
         const weekly = weeklyByPlayerId.get(player.id);
-        const prior = priorByPlayerId.get(player.id);
         const profileHandicapIndex = Number(player.handicap_index);
-        const defaultCourseHandicap = Number(prior?.course_handicap ?? 0);
-        const courseHandicap = Number(weekly?.course_handicap ?? defaultCourseHandicap);
+        const seededCourseHandicap = computeNineHoleCourseHandicap({
+          handicapIndex: profileHandicapIndex,
+          ...sideCourseValues,
+        });
+        const courseHandicap = Number(weekly?.course_handicap ?? seededCourseHandicap);
 
         if (!weekly) {
           seedPayload.push({
@@ -423,14 +520,36 @@ export default function AdminHandicapsPage() {
       setRows((prev) =>
         prev.map((row) => {
           if (row.playerId !== playerId) return row;
-          return recalculateRowFinal({ ...row, [field]: value }, parsedLeaguePercent);
+
+          if (field === "handicapIndex") {
+            const handicapIndex = parseInputNumber(value);
+            if (handicapIndex == null) {
+              return recalculateRowFinal({ ...row, handicapIndex: value }, parsedLeaguePercent);
+            }
+
+            const courseHandicap = computeNineHoleCourseHandicap({
+              handicapIndex,
+              ...selectedCourseValues,
+            });
+
+            return recalculateRowFinal(
+              {
+                ...row,
+                handicapIndex: value,
+                courseHandicap: formatNumber(courseHandicap),
+              },
+              parsedLeaguePercent
+            );
+          }
+
+          return recalculateRowFinal({ ...row, courseHandicap: value }, parsedLeaguePercent);
         })
       );
       setDirty(true);
       setSaveSuccess(null);
       setSaveError(null);
     },
-    [leagueHandicapPercent]
+    [leagueHandicapPercent, selectedCourseValues]
   );
 
   const onLeaguePercentChange = useCallback((value: string) => {
@@ -576,6 +695,51 @@ export default function AdminHandicapsPage() {
     setSaving(false);
   }, [rows, selectedWeekId, leagueHandicapPercent]);
 
+  const refreshFromGhin = useCallback(async () => {
+    if (dirty) {
+      setSaveError("Save your current handicap edits before refreshing from GHIN.");
+      setSyncStatus(null);
+      setSyncResults([]);
+      return;
+    }
+
+    setSyncingGhin(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+    setSyncStatus(null);
+    setSyncResults([]);
+
+    try {
+      const response = await fetch("/api/admin/ghin-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekId: selectedWeekId || undefined }),
+      });
+      const body = (await response.json().catch(() => null)) as GhinSyncResponse | null;
+
+      if (!response.ok) {
+        throw new Error(body?.error ?? "GHIN refresh failed.");
+      }
+
+      const failed = body?.failed ?? 0;
+      const updated = body?.updated ?? 0;
+      const unchanged = body?.unchanged ?? 0;
+      const total = body?.total ?? updated + unchanged + failed;
+      setSyncResults(body?.results ?? []);
+      setSyncStatus(
+        failed > 0
+          ? `GHIN refresh finished with ${failed} issue${failed === 1 ? "" : "s"}. Updated ${updated} of ${total} players.`
+          : `GHIN refresh complete. Updated ${updated}; ${unchanged} already current.`
+      );
+      loadRows();
+    } catch (syncError) {
+      setSaveError(syncError instanceof Error ? syncError.message : "GHIN refresh failed.");
+      setSyncResults([]);
+    } finally {
+      setSyncingGhin(false);
+    }
+  }, [dirty, loadRows, selectedWeekId]);
+
   if (loadingWeeks) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
@@ -631,6 +795,56 @@ export default function AdminHandicapsPage() {
           {saveSuccess}
         </div>
       )}
+      {syncStatus && (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {syncStatus}
+        </div>
+      )}
+      {syncResults.length > 0 && (
+        <div className="mb-4 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+          <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
+            <h2 className="text-sm font-semibold text-zinc-900">GHIN Refresh Results</h2>
+          </div>
+          <div className="divide-y divide-zinc-100">
+            {syncResults.map((result) => (
+              <div
+                key={result.playerId}
+                className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[1fr_auto]"
+              >
+                <div>
+                  <p className="font-medium text-zinc-900">{result.playerName}</p>
+                  <p className="text-zinc-500">GHIN {result.ghin}</p>
+                  {result.message && (
+                    <p className="mt-1 text-red-700">{result.message}</p>
+                  )}
+                </div>
+                <div className="sm:text-right">
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      result.status === "failed"
+                        ? "bg-red-50 text-red-700"
+                        : result.status === "updated"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-zinc-100 text-zinc-700"
+                    }`}
+                  >
+                    {result.status === "failed"
+                      ? "Failed"
+                      : result.status === "updated"
+                        ? `Updated to ${result.handicapIndex}`
+                        : `Current at ${result.handicapIndex}`}
+                  </span>
+                  {result.status === "updated" && (
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Was {result.previousHandicapIndex}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mb-6">
         <label
@@ -648,11 +862,35 @@ export default function AdminHandicapsPage() {
           <option value="">Select a week…</option>
           {weeks.map((week) => (
             <option key={week.id} value={week.id}>
-              Week {week.week_number} — {week.week_date}
+              Week {week.week_number} — {week.play_date ?? week.week_date} · {formatSideToPlay(week.side_to_play)}
               {selectedWeekId === week.id && !week.is_finalized ? " (Active)" : ""}
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-zinc-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900">GHIN Refresh</h2>
+            <p className="mt-1 text-sm text-zinc-600">
+              Pull current handicap indexes from GHIN for paid members, then refresh this week&apos;s handicap rows.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={refreshFromGhin}
+            disabled={syncingGhin || loadingRows || dirty}
+            className="w-full rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            {syncingGhin ? "Refreshing…" : "Refresh from GHIN"}
+          </button>
+        </div>
+        {dirty && (
+          <p className="mt-3 text-sm text-amber-700">
+            Save current edits before refreshing from GHIN.
+          </p>
+        )}
       </div>
 
       <div className="mb-6">
@@ -674,7 +912,7 @@ export default function AdminHandicapsPage() {
 
       {selectedWeek && (
         <p className="mb-4 text-sm text-zinc-600">
-          Editing active players for Week {selectedWeek.week_number}.
+          Editing active players for Week {selectedWeek.week_number} · {formatSideToPlay(selectedWeek.side_to_play)}.
         </p>
       )}
 

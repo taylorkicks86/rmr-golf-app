@@ -6,6 +6,12 @@ export type CourseConfig = {
   tee_name: string;
   rating: number | null;
   slope: number | null;
+  front_rating: number | null;
+  front_slope: number | null;
+  front_par: number | null;
+  back_rating: number | null;
+  back_slope: number | null;
+  back_par: number | null;
 };
 
 export type WeekCourseHole = {
@@ -18,6 +24,12 @@ export type WeekCourseHole = {
   tee_name: string;
   rating: number | null;
   slope: number | null;
+  front_rating: number | null;
+  front_slope: number | null;
+  front_par: number | null;
+  back_rating: number | null;
+  back_slope: number | null;
+  back_par: number | null;
 };
 
 export type WeekCourseContext =
@@ -30,6 +42,12 @@ export type WeekCourseContext =
       tee_name: string;
       rating: number | null;
       slope: number | null;
+      front_rating: number | null;
+      front_slope: number | null;
+      front_par: number | null;
+      back_rating: number | null;
+      back_slope: number | null;
+      back_par: number | null;
       holes: WeekCourseHole[];
     }
   | {
@@ -53,6 +71,12 @@ type CourseConfigRow = {
   tee_name: string;
   rating: number | null;
   slope: number | null;
+  front_rating: number | null;
+  front_slope: number | null;
+  front_par: number | null;
+  back_rating: number | null;
+  back_slope: number | null;
+  back_par: number | null;
 };
 
 type CourseHoleRow = {
@@ -92,7 +116,7 @@ async function resolveWeekCourse(params: {
   if (!courseId) {
     const { data: defaultCourseData, error: defaultCourseError } = await supabase
       .from("course_configs")
-      .select("id, name, tee_name, rating, slope")
+      .select("id, name, tee_name, rating, slope, front_rating, front_slope, front_par, back_rating, back_slope, back_par")
       .eq("is_default", true)
       .maybeSingle();
 
@@ -124,7 +148,7 @@ async function resolveWeekCourse(params: {
 
   const { data: courseData, error: courseError } = await supabase
     .from("course_configs")
-    .select("id, name, tee_name, rating, slope")
+    .select("id, name, tee_name, rating, slope, front_rating, front_slope, front_par, back_rating, back_slope, back_par")
     .eq("id", courseId)
     .maybeSingle();
 
@@ -177,6 +201,12 @@ export async function getActiveWeekHolesForWeek(params: {
     tee_name: resolved.course!.tee_name,
     rating: resolved.course!.rating,
     slope: resolved.course!.slope,
+    front_rating: resolved.course!.front_rating,
+    front_slope: resolved.course!.front_slope,
+    front_par: resolved.course!.front_par,
+    back_rating: resolved.course!.back_rating,
+    back_slope: resolved.course!.back_slope,
+    back_par: resolved.course!.back_par,
   }));
 
   return {
@@ -188,6 +218,12 @@ export async function getActiveWeekHolesForWeek(params: {
     tee_name: resolved.course.tee_name,
     rating: resolved.course.rating,
     slope: resolved.course.slope,
+    front_rating: resolved.course.front_rating,
+    front_slope: resolved.course.front_slope,
+    front_par: resolved.course.front_par,
+    back_rating: resolved.course.back_rating,
+    back_slope: resolved.course.back_slope,
+    back_par: resolved.course.back_par,
     holes,
   };
 }
