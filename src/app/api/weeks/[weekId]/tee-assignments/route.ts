@@ -74,8 +74,6 @@ export async function GET(
       | null) ?? []
     ).filter((row) => activePlayerIds.has(row.player_id));
 
-  const assignedPlayerIds = new Set(assignments.map((row) => row.player_id));
-  const unassignedPlayerIds = Array.from(activePlayerIds).filter((playerId) => !assignedPlayerIds.has(playerId));
   const visiblePlayerIds = Array.from(new Set([...activePlayerIds, ...notPlayingPlayerIds]));
   const playerNamesById = new Map<string, string>();
 
@@ -99,7 +97,7 @@ export async function GET(
       ...row,
       player_name: playerNamesById.get(row.player_id) ?? "",
     })),
-    unassignedPlayers: unassignedPlayerIds.map((playerId) => ({
+    playingPlayers: Array.from(activePlayerIds).map((playerId) => ({
       player_id: playerId,
       player_name: playerNamesById.get(playerId) ?? "",
     })),

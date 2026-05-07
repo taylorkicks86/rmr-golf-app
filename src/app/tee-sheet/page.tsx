@@ -83,7 +83,7 @@ export default function PublicTeeSheetPage() {
   const [weeks, setWeeks] = useState<LeagueWeek[]>([]);
   const [selectedWeekId, setSelectedWeekId] = useState<string>("");
   const [rows, setRows] = useState<Row[]>([]);
-  const [unassignedPlayers, setUnassignedPlayers] = useState<TeeSheetPlayerRecord[]>([]);
+  const [playingPlayers, setPlayingPlayers] = useState<TeeSheetPlayerRecord[]>([]);
   const [notPlayingPlayers, setNotPlayingPlayers] = useState<TeeSheetPlayerRecord[]>([]);
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
@@ -148,7 +148,7 @@ export default function PublicTeeSheetPage() {
   const loadData = useCallback(() => {
     if (!selectedWeekId) {
       setRows([]);
-      setUnassignedPlayers([]);
+      setPlayingPlayers([]);
       setNotPlayingPlayers([]);
       return;
     }
@@ -162,6 +162,7 @@ export default function PublicTeeSheetPage() {
           | {
               error?: string;
               assignments?: TeeAssignmentRecord[];
+              playingPlayers?: TeeSheetPlayerRecord[];
               unassignedPlayers?: TeeSheetPlayerRecord[];
               notPlayingPlayers?: TeeSheetPlayerRecord[];
             }
@@ -173,13 +174,13 @@ export default function PublicTeeSheetPage() {
 
         return {
           assignments: body?.assignments ?? [],
-          unassignedPlayers: body?.unassignedPlayers ?? [],
+          playingPlayers: body?.playingPlayers ?? body?.unassignedPlayers ?? [],
           notPlayingPlayers: body?.notPlayingPlayers ?? [],
         };
       })
-      .then(({ assignments, unassignedPlayers: nextUnassignedPlayers, notPlayingPlayers: nextNotPlayingPlayers }) => {
-        setUnassignedPlayers(
-          [...nextUnassignedPlayers].sort((a, b) => a.player_name.localeCompare(b.player_name))
+      .then(({ assignments, playingPlayers: nextPlayingPlayers, notPlayingPlayers: nextNotPlayingPlayers }) => {
+        setPlayingPlayers(
+          [...nextPlayingPlayers].sort((a, b) => a.player_name.localeCompare(b.player_name))
         );
         setNotPlayingPlayers(
           [...nextNotPlayingPlayers].sort((a, b) => a.player_name.localeCompare(b.player_name))
@@ -210,7 +211,7 @@ export default function PublicTeeSheetPage() {
         const message = fetchError instanceof Error ? fetchError.message : "Failed to load tee sheet.";
         setError(message);
         setRows([]);
-        setUnassignedPlayers([]);
+        setPlayingPlayers([]);
         setNotPlayingPlayers([]);
         setLoadingRows(false);
       });
@@ -263,10 +264,6 @@ export default function PublicTeeSheetPage() {
     }));
   }, [rows]);
 
-  const hasAssignedTeeTimes = useMemo(
-    () => rows.some((row) => ALLOWED_TEE_TIMES.has(row.teeTime.trim())),
-    [rows]
-  );
   const listTableClass = "w-full divide-y divide-zinc-200 text-sm";
   const cardClass = "overflow-hidden rounded-md border border-emerald-900/20 bg-[#f8f7f2] shadow-md";
   const cardHeaderClass = "border-b border-emerald-950/35 bg-[#1d392f] px-3 py-2 text-white";
@@ -380,23 +377,21 @@ export default function PublicTeeSheetPage() {
             <section className={`${cardClass} mb-6`}>
               <div className={cardHeaderClass}>
                 <h2 className="text-lg font-semibold text-white sm:text-xl">
-                  Unassigned Players ({unassignedPlayers.length})
+                  Playing This Week ({playingPlayers.length})
                 </h2>
               </div>
               <div className={cardBodyClass}>
                 {loadingRows ? (
                   <p className="text-sm text-zinc-500">Loading players…</p>
-                ) : unassignedPlayers.length === 0 ? (
+                ) : playingPlayers.length === 0 ? (
                   <p className="text-sm text-zinc-500">
-                    {hasAssignedTeeTimes
-                      ? "No playing players are waiting for an assignment."
-                      : "No saved tee sheet assignments yet."}
+                    No players are marked playing this week.
                   </p>
                 ) : (
                   <table className={listTableClass}>
                     <tbody className="divide-y divide-zinc-200">
-                      {unassignedPlayers.map((player) => (
-                        <tr key={`unassigned-${player.player_id}`}>
+                      {playingPlayers.map((player) => (
+                        <tr key={`playing-${player.player_id}`}>
                           <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
                         </tr>
                       ))}
