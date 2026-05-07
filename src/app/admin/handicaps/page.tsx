@@ -969,7 +969,7 @@ export default function AdminHandicapsPage() {
                 </label>
                 <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
                   <p className="text-xs uppercase tracking-wide text-emerald-700">
-                    Final Computed Handicap
+                    Cup Handicap
                   </p>
                   <p className="text-base font-semibold text-emerald-900">
                     {row.finalComputedHandicap}
@@ -995,7 +995,7 @@ export default function AdminHandicapsPage() {
                 Course Handicap
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500">
-                Final Computed Handicap
+                Cup Handicap
               </th>
             </tr>
           </thead>
