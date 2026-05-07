@@ -59,7 +59,7 @@ export default async function AccountPage() {
         label="RMR GOLF LEAGUE"
         title="Account"
         subtitle="Update your player profile and password."
-        backgroundImage="/images/backgrounds/login-bg.jpg"
+        backgroundImage="/images/backgrounds/golf_peak_summer.jpg"
         backgroundClassName="min-h-[350px]"
         contentClassName="mx-auto flex min-h-[34vh] max-w-screen-xl flex-col px-4 py-6 pb-5 sm:px-5 sm:py-8 sm:pb-6"
         titleClassName="text-2xl sm:text-3xl"
