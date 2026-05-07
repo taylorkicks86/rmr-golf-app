@@ -150,7 +150,7 @@ export function ScorecardModalView({
 }) {
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-0 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:items-center sm:p-4 sm:pb-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-0 pb-[max(3.25rem,calc(2.75rem+env(safe-area-inset-bottom)))] sm:items-center sm:p-4 sm:pb-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
