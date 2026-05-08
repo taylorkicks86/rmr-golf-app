@@ -36,7 +36,7 @@ export function computeNineHoleCourseHandicap(params: {
     return Math.round(handicapIndex / 2);
   }
 
-  const nineHoleIndex = Number((handicapIndex / 2).toFixed(1));
+  const nineHoleIndex = Math.round((handicapIndex / 2 + 1e-9) * 10) / 10;
   const courseHandicap = (nineHoleIndex * params.slope) / 113 + (params.rating - params.par);
   return Math.round(courseHandicap);
 }
