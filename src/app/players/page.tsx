@@ -7,7 +7,6 @@ type Player = {
   id: string;
   full_name: string;
   handicap_index: number;
-  ghin: string;
   paid: boolean;
 };
 
@@ -15,7 +14,7 @@ export default async function PlayersPage() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("players")
-    .select("id, full_name, handicap_index, ghin, paid")
+    .select("id, full_name, handicap_index, paid")
     .order("paid", { ascending: false })
     .order("full_name", { ascending: true });
 
@@ -70,8 +69,6 @@ export default async function PlayersPage() {
                       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
                         <p className="text-zinc-500">Handicap</p>
                         <p className="text-right font-medium text-zinc-900">{player.handicap_index}</p>
-                        <p className="text-zinc-500">GHIN</p>
-                        <p className="text-right font-medium tracking-wide text-zinc-900">{player.ghin}</p>
                       </div>
                       <div className="mt-3">
                         <Link
@@ -106,12 +103,6 @@ export default async function PlayersPage() {
                         scope="col"
                         className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500"
                       >
-                        GHIN
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500"
-                      >
                         View
                       </th>
                     </tr>
@@ -119,7 +110,7 @@ export default async function PlayersPage() {
                   <tbody className="divide-y divide-zinc-200/90 bg-white">
                     {players.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                        <td colSpan={3} className="px-4 py-8 text-center text-zinc-500">
                           No players found.
                         </td>
                       </tr>
@@ -133,9 +124,6 @@ export default async function PlayersPage() {
                             <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
                               {player.handicap_index}
                             </span>
-                          </td>
-                          <td className="whitespace-nowrap px-5 py-4 text-sm tracking-wide text-zinc-600">
-                            {player.ghin}
                           </td>
                           <td className="whitespace-nowrap px-5 py-4 text-sm">
                             <Link

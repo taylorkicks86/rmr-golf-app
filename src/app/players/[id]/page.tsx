@@ -12,7 +12,6 @@ type Player = {
   id: string;
   full_name: string;
   handicap_index: number;
-  ghin: string;
   paid: boolean;
 };
 
@@ -94,7 +93,7 @@ export default async function PlayerProfilePage({ params }: Props) {
 
   const { data: playerData, error: playerError } = await supabase
     .from("players")
-    .select("id, full_name, handicap_index, ghin, paid")
+    .select("id, full_name, handicap_index, paid")
     .eq("id", id)
     .maybeSingle();
 
@@ -472,16 +471,15 @@ export default async function PlayerProfilePage({ params }: Props) {
         </Link>
       }
     >
-      <section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4 sm:p-5">
+      <section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4 text-center sm:p-5">
         <h2 className="mb-3 text-xl font-semibold text-zinc-900">{player.full_name}</h2>
         <div className="space-y-1 text-sm text-zinc-700">
           <p>Handicap Index: {player.handicap_index}</p>
-          <p>GHIN: {player.ghin}</p>
           <p>Membership: {player.paid ? "Paid" : "Sub"}</p>
         </div>
       </section>
 
-      <section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4 sm:p-5">
+      <section className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50/60 p-4 text-center sm:p-5">
         <h2 className="mb-3 text-xl font-semibold text-zinc-900">Season Snapshot</h2>
         <div className="space-y-1 text-sm text-zinc-700">
           <p className="text-zinc-500">{seasonLabel}</p>
