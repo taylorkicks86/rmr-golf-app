@@ -179,6 +179,7 @@ async function resolveWeekCourse(params: {
   week: WeekCourseRow | null;
   course: CourseConfigRow | null;
   leagueHandicapPercent: number;
+  handicapCap: number | null;
 }> {
   const { supabase, weekId } = params;
 
@@ -190,7 +191,7 @@ async function resolveWeekCourse(params: {
       .maybeSingle(),
     supabase
       .from("league_week_settings")
-      .select("league_handicap_percent")
+      .select("league_handicap_percent, handicap_cap")
       .eq("league_week_id", weekId)
       .maybeSingle(),
   ]);
@@ -199,7 +200,9 @@ async function resolveWeekCourse(params: {
   if (settingsRes.error) throw new Error(settingsRes.error.message);
 
   const week = (weekRes.data as WeekCourseRow | null) ?? null;
-  if (!week) return { week: null, course: null, leagueHandicapPercent: 80 };
+  if (!week) {
+    return { week: null, course: null, leagueHandicapPercent: 80, handicapCap: null };
+  }
 
   let courseId = week.course_config_id;
   let course: CourseConfigRow | null = null;
@@ -233,6 +236,8 @@ async function resolveWeekCourse(params: {
     leagueHandicapPercent: Number(
       (settingsRes.data as { league_handicap_percent: number } | null)?.league_handicap_percent ?? 80
     ),
+    handicapCap:
+      (settingsRes.data as { handicap_cap?: number | null } | null)?.handicap_cap ?? null,
   };
 }
 
@@ -252,6 +257,14 @@ function getSideCourseValues(week: WeekCourseRow, course: CourseConfigRow | null
   };
 }
 
+function applyCourseHandicapCap(courseHandicap: number, handicapCap: number | null): number {
+  if (handicapCap == null || !Number.isFinite(handicapCap)) {
+    return courseHandicap;
+  }
+
+  return Math.min(courseHandicap, Math.round(handicapCap));
+}
+
 async function syncSelectedWeekHandicapIndexes(params: {
   supabase: SupabaseLike;
   weekId: string;
@@ -265,7 +278,7 @@ async function syncSelectedWeekHandicapIndexes(params: {
 
   if (successfulResults.length === 0) return;
 
-  const { week, course, leagueHandicapPercent } = await resolveWeekCourse({ supabase, weekId });
+  const { week, course, leagueHandicapPercent, handicapCap } = await resolveWeekCourse({ supabase, weekId });
   if (!week) throw new Error("League week not found.");
 
   const playerIds = successfulResults.map((result) => result.playerId);
@@ -285,10 +298,13 @@ async function syncSelectedWeekHandicapIndexes(params: {
   for (const result of successfulResults) {
     if (!existingWeeklyPlayerIds.has(result.playerId)) continue;
 
-    const courseHandicap = computeNineHoleCourseHandicap({
-      handicapIndex: result.handicapIndex,
-      ...sideValues,
-    });
+    const courseHandicap = applyCourseHandicapCap(
+      computeNineHoleCourseHandicap({
+        handicapIndex: result.handicapIndex,
+        ...sideValues,
+      }),
+      handicapCap
+    );
 
     const { error: weeklyUpdateError } = await supabase
       .from("weekly_handicaps")

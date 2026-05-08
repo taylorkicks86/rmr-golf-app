@@ -42,6 +42,7 @@ type WeeklyHandicapRecord = {
 
 type LeagueWeekSettingsRecord = {
   league_handicap_percent: number;
+  handicap_cap: number | null;
 };
 
 type CourseConfigRecord = {
@@ -128,6 +129,28 @@ function getCourseValuesForSide(
       };
 }
 
+function applyCourseHandicapCap(courseHandicap: number, handicapCap: number | null): number {
+  if (handicapCap == null || !Number.isFinite(handicapCap)) {
+    return courseHandicap;
+  }
+
+  return Math.min(courseHandicap, Math.round(handicapCap));
+}
+
+function computeCappedCourseHandicap(params: {
+  handicapIndex: number;
+  courseValues: NineHoleCourseValues;
+  handicapCap: number | null;
+}): number {
+  return applyCourseHandicapCap(
+    computeNineHoleCourseHandicap({
+      handicapIndex: params.handicapIndex,
+      ...params.courseValues,
+    }),
+    params.handicapCap
+  );
+}
+
 function recalculateRowFinal(row: Row, leagueHandicapPercent: number): Row {
   const courseHandicap = parseInputNumber(row.courseHandicap) ?? 0;
   return {
@@ -151,6 +174,7 @@ export default function AdminHandicapsPage() {
     par: null,
   });
   const [leagueHandicapPercent, setLeagueHandicapPercent] = useState<string>("80");
+  const [handicapCap, setHandicapCap] = useState<string>("");
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -236,6 +260,7 @@ export default function AdminHandicapsPage() {
       setRows([]);
       setSelectedCourseValues({ rating: null, slope: null, par: null });
       setLeagueHandicapPercent("80");
+      setHandicapCap("");
       setDirty(false);
       setSaveError(null);
       setSaveSuccess(null);
@@ -256,7 +281,7 @@ export default function AdminHandicapsPage() {
         .eq("playing_this_week", true),
       supabase
         .from("league_week_settings")
-        .select("league_handicap_percent")
+        .select("league_handicap_percent, handicap_cap")
         .eq("league_week_id", selectedWeekId)
         .maybeSingle(),
     ]).then(async ([participationRes, weekSettingsRes]) => {
@@ -331,10 +356,11 @@ export default function AdminHandicapsPage() {
       }
 
       let priorWeekPercent: number | null = null;
+      let priorWeekCap: number | null = null;
       if (!(weekSettingsRes.data as LeagueWeekSettingsRecord | null)?.league_handicap_percent && priorWeekId) {
         const priorWeekSettingsRes = await supabase
           .from("league_week_settings")
-          .select("league_handicap_percent")
+          .select("league_handicap_percent, handicap_cap")
           .eq("league_week_id", priorWeekId)
           .maybeSingle();
 
@@ -348,14 +374,21 @@ export default function AdminHandicapsPage() {
         priorWeekPercent =
           (priorWeekSettingsRes.data as LeagueWeekSettingsRecord | null)
             ?.league_handicap_percent ?? null;
+        priorWeekCap =
+          (priorWeekSettingsRes.data as LeagueWeekSettingsRecord | null)?.handicap_cap ?? null;
       }
 
+      const storedWeekCap =
+        (weekSettingsRes.data as LeagueWeekSettingsRecord | null)?.handicap_cap ??
+        priorWeekCap ??
+        null;
       const storedWeekPercent = Number(
         (weekSettingsRes.data as LeagueWeekSettingsRecord | null)?.league_handicap_percent ??
           priorWeekPercent ??
           80
       );
       setLeagueHandicapPercent(formatNumber(storedWeekPercent));
+      setHandicapCap(storedWeekCap == null ? "" : formatNumber(storedWeekCap));
 
       if (!(weekSettingsRes.data as LeagueWeekSettingsRecord | null)?.league_handicap_percent && priorWeekPercent != null) {
         await supabase
@@ -364,6 +397,7 @@ export default function AdminHandicapsPage() {
             {
               league_week_id: selectedWeekId,
               league_handicap_percent: Number(priorWeekPercent.toFixed(2)),
+              handicap_cap: priorWeekCap,
             },
             { onConflict: "league_week_id" }
           );
@@ -454,9 +488,10 @@ export default function AdminHandicapsPage() {
       const nextRows = players.map((player) => {
         const weekly = weeklyByPlayerId.get(player.id);
         const profileHandicapIndex = Number(player.handicap_index);
-        const seededCourseHandicap = computeNineHoleCourseHandicap({
+        const seededCourseHandicap = computeCappedCourseHandicap({
           handicapIndex: profileHandicapIndex,
-          ...sideCourseValues,
+          courseValues: sideCourseValues,
+          handicapCap: storedWeekCap,
         });
         const courseHandicap = Number(weekly?.course_handicap ?? seededCourseHandicap);
 
@@ -517,6 +552,7 @@ export default function AdminHandicapsPage() {
     (playerId: string, field: "handicapIndex" | "courseHandicap", value: string) => {
       if (field === "courseHandicap" && !isWholeNumberString(value)) return;
       const parsedLeaguePercent = parseInputNumber(leagueHandicapPercent) ?? 0;
+      const parsedHandicapCap = parseInputNumber(handicapCap);
       setRows((prev) =>
         prev.map((row) => {
           if (row.playerId !== playerId) return row;
@@ -527,9 +563,10 @@ export default function AdminHandicapsPage() {
               return recalculateRowFinal({ ...row, handicapIndex: value }, parsedLeaguePercent);
             }
 
-            const courseHandicap = computeNineHoleCourseHandicap({
+            const courseHandicap = computeCappedCourseHandicap({
               handicapIndex,
-              ...selectedCourseValues,
+              courseValues: selectedCourseValues,
+              handicapCap: parsedHandicapCap,
             });
 
             return recalculateRowFinal(
@@ -549,7 +586,7 @@ export default function AdminHandicapsPage() {
       setSaveSuccess(null);
       setSaveError(null);
     },
-    [leagueHandicapPercent, selectedCourseValues]
+    [handicapCap, leagueHandicapPercent, selectedCourseValues]
   );
 
   const onLeaguePercentChange = useCallback((value: string) => {
@@ -561,6 +598,41 @@ export default function AdminHandicapsPage() {
     setSaveError(null);
   }, []);
 
+  const onHandicapCapChange = useCallback(
+    (value: string) => {
+      if (!isWholeNumberString(value)) return;
+      setHandicapCap(value);
+      const parsedPercent = parseInputNumber(leagueHandicapPercent) ?? 0;
+      const parsedHandicapCap = parseInputNumber(value);
+      setRows((prev) =>
+        prev.map((row) => {
+          const handicapIndex = parseInputNumber(row.handicapIndex);
+          if (handicapIndex == null) {
+            return recalculateRowFinal(row, parsedPercent);
+          }
+
+          return recalculateRowFinal(
+            {
+              ...row,
+              courseHandicap: formatNumber(
+                computeCappedCourseHandicap({
+                  handicapIndex,
+                  courseValues: selectedCourseValues,
+                  handicapCap: parsedHandicapCap,
+                })
+              ),
+            },
+            parsedPercent
+          );
+        })
+      );
+      setDirty(true);
+      setSaveSuccess(null);
+      setSaveError(null);
+    },
+    [leagueHandicapPercent, selectedCourseValues]
+  );
+
   const saveAll = useCallback(async () => {
     if (!selectedWeekId || rows.length === 0) return;
 
@@ -571,6 +643,15 @@ export default function AdminHandicapsPage() {
     }
     if (parsedLeaguePercent < 0 || parsedLeaguePercent > 100) {
       setSaveError("League Handicap % must be between 0 and 100.");
+      return;
+    }
+    const parsedHandicapCap = handicapCap.trim() ? parseInputNumber(handicapCap) : null;
+    if (handicapCap.trim() && parsedHandicapCap == null) {
+      setSaveError("Course Handicap Cap must be numeric.");
+      return;
+    }
+    if (parsedHandicapCap != null && (!Number.isInteger(parsedHandicapCap) || parsedHandicapCap < -20 || parsedHandicapCap > 99)) {
+      setSaveError("Course Handicap Cap must be a whole number between -20 and 99.");
       return;
     }
 
@@ -637,6 +718,7 @@ export default function AdminHandicapsPage() {
         {
           league_week_id: selectedWeekId,
           league_handicap_percent: Number(parsedLeaguePercent.toFixed(2)),
+          handicap_cap: parsedHandicapCap,
         },
         { onConflict: "league_week_id" }
       );
@@ -690,10 +772,11 @@ export default function AdminHandicapsPage() {
       })
     );
     setLeagueHandicapPercent(formatNumber(parsedLeaguePercent));
+    setHandicapCap(parsedHandicapCap == null ? "" : formatNumber(parsedHandicapCap));
     setDirty(false);
     setSaveSuccess("Weekly handicaps saved.");
     setSaving(false);
-  }, [rows, selectedWeekId, leagueHandicapPercent]);
+  }, [handicapCap, rows, selectedWeekId, leagueHandicapPercent]);
 
   const refreshFromGhin = useCallback(async () => {
     if (dirty) {
@@ -893,21 +976,36 @@ export default function AdminHandicapsPage() {
         )}
       </div>
 
-      <div className="mb-6">
-        <label
-          htmlFor="league-handicap-percent"
-          className="mb-2 block text-sm font-medium text-zinc-700"
-        >
-          League Handicap %
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:max-w-xl">
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-zinc-700">
+            League Handicap %
+          </span>
+          <input
+            id="league-handicap-percent"
+            type="number"
+            step="0.1"
+            value={leagueHandicapPercent}
+            onChange={(event) => onLeaguePercentChange(event.target.value)}
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          />
         </label>
-        <input
-          id="league-handicap-percent"
-          type="number"
-          step="0.1"
-          value={leagueHandicapPercent}
-          onChange={(event) => onLeaguePercentChange(event.target.value)}
-          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 sm:max-w-[12rem]"
-        />
+        <label className="block">
+          <span className="mb-2 block text-sm font-medium text-zinc-700">
+            Course Handicap Cap
+          </span>
+          <input
+            id="handicap-cap"
+            type="number"
+            step="1"
+            min={-20}
+            max={99}
+            placeholder="No cap"
+            value={handicapCap}
+            onChange={(event) => onHandicapCapChange(event.target.value)}
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          />
+        </label>
       </div>
 
       {selectedWeek && (
