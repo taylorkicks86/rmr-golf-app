@@ -54,6 +54,10 @@ type ReminderResponse = {
   totalRecipients?: number;
   sent?: number;
   failed?: number;
+  results?: Array<{
+    email?: string;
+    status?: string;
+  }>;
 };
 
 const TEE_TIME_OPTIONS = [
@@ -698,9 +702,13 @@ export default function AdminTeeSheetPage() {
     const sent = body?.sent ?? 0;
     const failed = body?.failed ?? 0;
     const total = body?.totalRecipients ?? sent + failed;
+    const failedEmails = (body?.results ?? [])
+      .filter((result) => result.status === "failed" && result.email)
+      .map((result) => result.email)
+      .join(", ");
     setReminderMessage(
       failed > 0
-        ? `Sent ${sent} of ${total} RSVP reminders. ${failed} failed.`
+        ? `Sent ${sent} of ${total} RSVP reminders. ${failed} failed${failedEmails ? `: ${failedEmails}` : "."}`
         : total === 0
           ? "No players are currently undecided for this week."
           : `Sent ${sent} RSVP reminder${sent === 1 ? "" : "s"}.`
@@ -736,9 +744,13 @@ export default function AdminTeeSheetPage() {
     const sent = body?.sent ?? 0;
     const failed = body?.failed ?? 0;
     const total = body?.totalRecipients ?? sent + failed;
+    const failedEmails = (body?.results ?? [])
+      .filter((result) => result.status === "failed" && result.email)
+      .map((result) => result.email)
+      .join(", ");
     setReminderMessage(
       failed > 0
-        ? `Sent ${sent} of ${total} tee sheet emails. ${failed} failed.`
+        ? `Sent ${sent} of ${total} tee sheet emails. ${failed} failed${failedEmails ? `: ${failedEmails}` : "."}`
         : `Sent ${sent} tee sheet email${sent === 1 ? "" : "s"}.`
     );
     setSendingTeeSheetEmail(false);

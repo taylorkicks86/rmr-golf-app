@@ -18,6 +18,10 @@ type EmailGroupResponse = {
   totalRecipients?: number;
   sent?: number;
   failed?: number;
+  results?: Array<{
+    email?: string;
+    status?: string;
+  }>;
 };
 
 function sortPlayers(a: Player, b: Player) {
@@ -114,9 +118,13 @@ export default function AdminEmailGroupsPage() {
     const sent = body?.sent ?? 0;
     const failed = body?.failed ?? 0;
     const total = body?.totalRecipients ?? sent + failed;
+    const failedEmails = (body?.results ?? [])
+      .filter((result) => result.status === "failed" && result.email)
+      .map((result) => result.email)
+      .join(", ");
     setSuccess(
       failed > 0
-        ? `Sent ${sent} of ${total} emails. ${failed} failed.`
+        ? `Sent ${sent} of ${total} emails. ${failed} failed${failedEmails ? `: ${failedEmails}` : "."}`
         : `Sent ${sent} email${sent === 1 ? "" : "s"}.`
     );
     setSending(false);

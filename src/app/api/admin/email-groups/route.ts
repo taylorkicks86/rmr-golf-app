@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
+import { pauseResendBatch, sendResendEmailWithRetry, shouldPauseResendBatch } from "@/lib/resend-email";
 import { buildCommissionerEmail } from "@/lib/rsvp-email";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
@@ -92,42 +93,6 @@ async function assertAdmin() {
   return { error: null, status: null };
 }
 
-async function sendResendEmail({
-  to,
-  subject,
-  html,
-}: {
-  to: string;
-  subject: string;
-  html: string;
-}) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("Server is missing RESEND_API_KEY.");
-  }
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: FROM_EMAIL,
-      to,
-      subject,
-      html,
-    }),
-  });
-
-  const body = (await response.json().catch(() => null)) as { id?: string; message?: string } | null;
-  if (!response.ok) {
-    throw new Error(body?.message ?? "Resend failed to send the email.");
-  }
-
-  return body?.id ?? null;
-}
-
 export async function POST(request: NextRequest) {
   const admin = await assertAdmin();
   if (admin.error) {
@@ -169,6 +134,7 @@ export async function POST(request: NextRequest) {
   }
 
   const results: SendResult[] = [];
+  let sentInBatch = 0;
 
   for (const player of recipients) {
     const sendEmail = await resolveSendEmail(supabase, player);
@@ -190,7 +156,7 @@ export async function POST(request: NextRequest) {
     });
 
     try {
-      const resendId = await sendResendEmail({ to: sendEmail, subject, html });
+      const resendId = await sendResendEmailWithRetry({ from: FROM_EMAIL, to: sendEmail, subject, html });
       results.push({
         playerId: player.id,
         playerName: player.full_name,
@@ -206,6 +172,12 @@ export async function POST(request: NextRequest) {
         status: "failed",
         message: sendError instanceof Error ? sendError.message : "Unknown send error.",
       });
+    }
+
+    sentInBatch += 1;
+    if (shouldPauseResendBatch(sentInBatch)) {
+      await pauseResendBatch();
+      sentInBatch = 0;
     }
   }
 
