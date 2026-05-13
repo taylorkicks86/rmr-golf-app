@@ -18,6 +18,7 @@ type LeagueWeek = {
   week_number: number;
   week_date: string;
   is_finalized: boolean;
+  tee_sheet_published: boolean;
   status: "open" | "finalized" | "cancelled" | "rained_out" | null;
 };
 
@@ -120,6 +121,7 @@ export async function GET(request: NextRequest) {
       currentPlayerIsAdmin: playerResolution.player.is_admin,
       weeks: [],
       selectedWeekId: "",
+      teeSheetPublished: false,
       rows: [],
       teeAssignments: [],
       activeHoles: [],
@@ -130,7 +132,7 @@ export async function GET(request: NextRequest) {
 
   const { data: weekData, error: weeksError } = await serviceSupabase
     .from("league_weeks")
-    .select("id, week_number, week_date, is_finalized, status")
+    .select("id, week_number, week_date, is_finalized, tee_sheet_published, status")
     .eq("season_id", season.id)
     .order("week_number", { ascending: true });
 
@@ -154,6 +156,8 @@ export async function GET(request: NextRequest) {
     requestedWeekId && filteredWeeks.some((week) => week.id === requestedWeekId)
       ? requestedWeekId
       : initialWeekId;
+  const selectedWeek = filteredWeeks.find((week) => week.id === selectedWeekId) ?? null;
+  const teeSheetPublished = selectedWeek?.tee_sheet_published === true;
 
   if (!selectedWeekId) {
     return NextResponse.json({
@@ -161,6 +165,7 @@ export async function GET(request: NextRequest) {
       currentPlayerIsAdmin: playerResolution.player.is_admin,
       weeks: filteredWeeks,
       selectedWeekId: "",
+      teeSheetPublished: false,
       rows: [],
       teeAssignments: [],
       activeHoles: [],
@@ -291,6 +296,7 @@ export async function GET(request: NextRequest) {
     currentPlayerIsAdmin: playerResolution.player.is_admin,
     weeks: filteredWeeks,
     selectedWeekId,
+    teeSheetPublished,
     rows,
     teeAssignments,
     activeHoles: activeHolesResult.status === "ok" ? activeHolesResult.holes : [],

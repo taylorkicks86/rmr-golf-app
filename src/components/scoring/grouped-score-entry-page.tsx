@@ -31,6 +31,7 @@ type LeagueWeek = {
   week_number: number;
   week_date: string;
   is_finalized: boolean;
+  tee_sheet_published?: boolean;
   status: "open" | "finalized" | "cancelled" | "rained_out" | null;
 };
 
@@ -90,6 +91,7 @@ type MemberScoreEntryPayload = {
   currentPlayerIsAdmin: boolean;
   weeks: LeagueWeek[];
   selectedWeekId: string;
+  teeSheetPublished?: boolean;
   rows: Row[];
   teeAssignments: TeeAssignmentRecord[];
   activeHoles: ActiveHole[];
@@ -252,6 +254,7 @@ export function GroupedScoreEntryPage({
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [currentPlayerIsAdmin, setCurrentPlayerIsAdmin] = useState<boolean | null>(null);
   const [teeAssignments, setTeeAssignments] = useState<TeeAssignmentRecord[]>([]);
+  const [teeSheetPublished, setTeeSheetPublished] = useState(true);
   const [activeHoles, setActiveHoles] = useState<ActiveHole[]>(DEFAULT_ACTIVE_HOLES);
 
   const applyMemberScoreEntryPayload = useCallback((payload: MemberScoreEntryPayload) => {
@@ -259,6 +262,7 @@ export function GroupedScoreEntryPage({
     setCurrentPlayerIsAdmin(payload.currentPlayerIsAdmin);
     setWeeks(payload.weeks);
     setSelectedWeekId(payload.selectedWeekId);
+    setTeeSheetPublished(payload.teeSheetPublished !== false);
     setRows(payload.rows);
     setTeeAssignments(payload.teeAssignments);
     setActiveHoles(payload.activeHoles.length === 9 ? payload.activeHoles : DEFAULT_ACTIVE_HOLES);
@@ -446,6 +450,7 @@ export function GroupedScoreEntryPage({
     if (!selectedWeekId) {
       setRows([]);
       setTeeAssignments([]);
+      setTeeSheetPublished(true);
       setActiveHoles(DEFAULT_ACTIVE_HOLES);
       setDirty(false);
       return;
@@ -689,6 +694,7 @@ export function GroupedScoreEntryPage({
   );
   const displayWeekNumberById = useMemo(() => buildScoringDisplayWeekNumberById(weeks), [weeks]);
   const isFinalized = selectedWeek?.is_finalized === true;
+  const scorecardsVisible = requireAdmin || teeSheetPublished;
 
   const groupedSections = useMemo<GroupSection[]>(() => {
     if (rows.length === 0) {
@@ -796,17 +802,21 @@ export function GroupedScoreEntryPage({
     if (isFinalized) {
       return new Set<string>();
     }
+    if (!scorecardsVisible) {
+      return new Set<string>();
+    }
     if (adminCanEditAllGroups) {
       return new Set(groupedSections.map((section) => section.key));
     }
     if (!currentUserGroupKey) return new Set<string>();
     return new Set([currentUserGroupKey]);
-  }, [adminCanEditAllGroups, groupedSections, currentUserGroupKey, isFinalized]);
+  }, [adminCanEditAllGroups, groupedSections, currentUserGroupKey, isFinalized, scorecardsVisible]);
 
   const showReadOnlyScorecardNotice =
     !requireAdmin &&
     selectedWeekId !== "" &&
     !loadingRows &&
+    scorecardsVisible &&
     rows.length > 0 &&
     currentPlayerId != null &&
     (!currentPlayerIsPlayingThisWeek || currentUserGroupKey == null);
@@ -862,6 +872,7 @@ export function GroupedScoreEntryPage({
       !selectedWeekId ||
       !allowScorecardSigning ||
       isFinalized ||
+      !scorecardsVisible ||
       !currentSigningRow ||
       isCurrentPlayerScorecardSigned
     ) {
@@ -920,12 +931,13 @@ export function GroupedScoreEntryPage({
     currentSigningRow,
     isCurrentPlayerScorecardSigned,
     isFinalized,
+    scorecardsVisible,
     selectedWeekId,
   ]);
 
   const onHoleChange = useCallback(
     (playerId: string, holeIndex: number, value: string) => {
-      if (isFinalized || !editablePlayerIds.has(playerId)) return;
+      if (isFinalized || !scorecardsVisible || !editablePlayerIds.has(playerId)) return;
       setRows((prev) =>
         prev.map((row) => {
           if (row.player.id !== playerId) {
@@ -938,11 +950,11 @@ export function GroupedScoreEntryPage({
       );
       setDirty(true);
     },
-    [isFinalized, editablePlayerIds]
+    [isFinalized, editablePlayerIds, scorecardsVisible]
   );
 
   const saveScores = useCallback(async () => {
-    if (!selectedWeekId || isFinalized || isGroupScorecardSigned) return;
+    if (!selectedWeekId || isFinalized || !scorecardsVisible || isGroupScorecardSigned) return;
 
     const editableRows = rows.filter((row) => editablePlayerIds.has(row.player.id));
     if (editableRows.length === 0) {
@@ -1056,7 +1068,15 @@ export function GroupedScoreEntryPage({
     setSaving(false);
     setDirty(false);
     loadData();
-  }, [rows, selectedWeekId, loadData, isFinalized, editablePlayerIds, isGroupScorecardSigned]);
+  }, [
+    rows,
+    selectedWeekId,
+    loadData,
+    isFinalized,
+    editablePlayerIds,
+    isGroupScorecardSigned,
+    scorecardsVisible,
+  ]);
 
   const renderGroupSection = (section: GroupSection) => {
     const sectionEditable =
@@ -1424,6 +1444,7 @@ export function GroupedScoreEntryPage({
                       loadingRows ||
                       saving ||
                       isFinalized ||
+                      !scorecardsVisible ||
                       !currentSigningRow ||
                       isCurrentPlayerScorecardSigned
                     }
@@ -1446,6 +1467,7 @@ export function GroupedScoreEntryPage({
                     saving ||
                     rows.length === 0 ||
                     isFinalized ||
+                    !scorecardsVisible ||
                     isGroupScorecardSigned ||
                     editablePlayerIds.size === 0
                   }
@@ -1491,6 +1513,7 @@ export function GroupedScoreEntryPage({
                       loadingRows ||
                       saving ||
                       isFinalized ||
+                      !scorecardsVisible ||
                       !currentSigningRow ||
                       isCurrentPlayerScorecardSigned
                     }
@@ -1513,6 +1536,7 @@ export function GroupedScoreEntryPage({
                     saving ||
                     rows.length === 0 ||
                     isFinalized ||
+                    !scorecardsVisible ||
                     isGroupScorecardSigned ||
                     editablePlayerIds.size === 0
                   }
@@ -1537,6 +1561,15 @@ export function GroupedScoreEntryPage({
           ) : loadingRows ? (
             <div className="overflow-x-auto rounded-lg border border-zinc-200">
               <div className="px-4 py-8 text-center text-zinc-500">Loading…</div>
+            </div>
+          ) : !scorecardsVisible ? (
+            <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+              <div className="border-b border-emerald-900/25 bg-[#1d392f] px-4 py-3">
+                <p className="text-sm font-semibold text-white">Scorecards Not Published</p>
+              </div>
+              <div className="px-4 py-8 text-center text-zinc-600">
+                Scorecards will be available after the tee sheet is published.
+              </div>
             </div>
           ) : rows.length === 0 ? (
             <div className="overflow-x-auto rounded-lg border border-zinc-200">

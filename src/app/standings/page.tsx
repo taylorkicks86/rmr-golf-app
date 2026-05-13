@@ -257,6 +257,7 @@ export default function StandingsPage() {
 
   const selectedSeason = seasons.find((season) => season.id === selectedSeasonId) ?? null;
   const standingsTitle = selectedSeason ? `${selectedSeason.year} Cup Leaderboard` : "Cup Leaderboard";
+  const leaderPoints = rows[0]?.countedPoints ?? 0;
 
   return (
     <div className="relative -mt-2">
@@ -310,8 +311,9 @@ export default function StandingsPage() {
           <table className="w-full table-fixed divide-y divide-zinc-200">
             <colgroup>
               <col className="w-[14%] min-w-[4ch]" />
-              <col className="w-[50%]" />
-              <col className="w-[36%] min-w-[10ch]" />
+              <col className="w-[44%]" />
+              <col className="w-[21%] min-w-[6ch]" />
+              <col className="w-[21%] min-w-[6ch]" />
             </colgroup>
             <thead className="bg-emerald-50/35">
               <tr>
@@ -322,26 +324,29 @@ export default function StandingsPage() {
                   Team
                 </th>
                 <th scope="col" className="px-px py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 sm:px-1">
-                  Counted Pts
+                  PTS
+                </th>
+                <th scope="col" className="px-px py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-zinc-500 sm:px-1">
+                  Back
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 bg-white">
               {!selectedSeasonId ? (
                 <tr>
-                  <td colSpan={3} className="px-3 py-6 text-center text-sm text-zinc-500">
+                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-zinc-500">
                     Select a season.
                   </td>
                 </tr>
               ) : loadingRows ? (
                 <tr>
-                  <td colSpan={3} className="px-3 py-6 text-center text-sm text-zinc-500">
+                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-zinc-500">
                     Loading…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-3 py-6 text-center text-sm text-zinc-500">
+                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-zinc-500">
                     No standings yet for this season.
                   </td>
                 </tr>
@@ -359,6 +364,9 @@ export default function StandingsPage() {
                     </td>
                     <td className="px-px py-1.5 text-center text-xs font-semibold text-zinc-900 sm:px-1">
                       {row.countedPoints}
+                    </td>
+                    <td className="px-px py-1.5 text-center text-xs font-semibold text-zinc-900 sm:px-1">
+                      {leaderPoints - row.countedPoints}
                     </td>
                   </tr>
                 ))
