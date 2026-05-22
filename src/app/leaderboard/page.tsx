@@ -67,6 +67,22 @@ function formatScoreLabel(netToPar: number | null): string {
   return netToPar > 0 ? `+${netToPar}` : `${netToPar}`;
 }
 
+function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
+  const displayWeekNumberById = new Map<string, number>();
+  const orderedWeeks = [...weeks].sort((a, b) => {
+    if (a.week_date !== b.week_date) {
+      return a.week_date.localeCompare(b.week_date);
+    }
+    return a.week_number - b.week_number;
+  });
+
+  orderedWeeks.forEach((week, index) => {
+    displayWeekNumberById.set(week.id, index + 1);
+  });
+
+  return displayWeekNumberById;
+}
+
 function formatWeekDateToMonthDay(rawDate: string): string {
   const parsed = new Date(`${rawDate}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return rawDate;
@@ -82,6 +98,7 @@ export default function LeaderboardPage() {
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const displayWeekNumberById = buildDisplayWeekNumberById(weeks);
 
   useEffect(() => {
     const supabase = createClient();
@@ -358,8 +375,10 @@ export default function LeaderboardPage() {
   }
 
   const selectedWeek = weeks.find((week) => week.id === selectedWeekId) ?? null;
+  const selectedDisplayWeekNumber =
+    selectedWeek ? displayWeekNumberById.get(selectedWeek.id) ?? selectedWeek.week_number : null;
   const leaderboardTitle = selectedWeek
-    ? `Week ${selectedWeek.week_number} - ${formatWeekDateToMonthDay(selectedWeek.week_date)}`
+    ? `Week ${selectedDisplayWeekNumber} - ${formatWeekDateToMonthDay(selectedWeek.week_date)}`
     : "Leaderboard";
 
   return (
@@ -393,7 +412,7 @@ export default function LeaderboardPage() {
             <option value="">Select a week…</option>
             {weeks.map((w) => (
               <option key={w.id} value={w.id}>
-                Week {w.week_number} — {w.week_date}
+                Week {displayWeekNumberById.get(w.id) ?? w.week_number} — {w.week_date}
               </option>
             ))}
           </select>
