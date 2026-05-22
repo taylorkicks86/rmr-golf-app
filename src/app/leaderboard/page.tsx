@@ -67,14 +67,6 @@ function formatScoreLabel(netToPar: number | null): string {
   return netToPar > 0 ? `+${netToPar}` : `${netToPar}`;
 }
 
-function buildDisplayWeekNumberById(weeks: LeagueWeek[]) {
-  const displayWeekNumberById = new Map<string, number>();
-  weeks.forEach((week, index) => {
-    displayWeekNumberById.set(week.id, index + 1);
-  });
-  return displayWeekNumberById;
-}
-
 function formatWeekDateToMonthDay(rawDate: string): string {
   const parsed = new Date(`${rawDate}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return rawDate;
@@ -90,7 +82,6 @@ export default function LeaderboardPage() {
   const [loadingWeeks, setLoadingWeeks] = useState(true);
   const [loadingRows, setLoadingRows] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const displayWeekNumberById = buildDisplayWeekNumberById(weeks);
 
   useEffect(() => {
     const supabase = createClient();
@@ -402,7 +393,7 @@ export default function LeaderboardPage() {
             <option value="">Select a week…</option>
             {weeks.map((w) => (
               <option key={w.id} value={w.id}>
-                Week {displayWeekNumberById.get(w.id) ?? w.week_number} — {w.week_date}
+                Week {w.week_number} — {w.week_date}
               </option>
             ))}
           </select>
