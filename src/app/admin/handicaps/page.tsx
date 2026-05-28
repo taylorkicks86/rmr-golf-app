@@ -6,7 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSeasonSelector } from "@/components/admin/AdminSeasonSelector";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
 import { createClient } from "@/lib/supabase/client";
-import { computeFinalComputedHandicap, computeNineHoleCourseHandicap } from "@/lib/weekly-handicap";
+import {
+  computeFinalComputedHandicap,
+  computeNineHoleCourseHandicapRaw,
+} from "@/lib/weekly-handicap";
 
 type Season = {
   id: string;
@@ -67,6 +70,7 @@ type Row = {
   handicapIndex: string;
   profileHandicapIndex: number;
   courseHandicap: string;
+  courseHandicapBasis: number;
   finalComputedHandicap: number;
 };
 
@@ -137,13 +141,13 @@ function applyCourseHandicapCap(courseHandicap: number, handicapCap: number | nu
   return Math.min(courseHandicap, Math.round(handicapCap));
 }
 
-function computeCappedCourseHandicap(params: {
+function computeCappedCourseHandicapRaw(params: {
   handicapIndex: number;
   courseValues: NineHoleCourseValues;
   handicapCap: number | null;
 }): number {
   return applyCourseHandicapCap(
-    computeNineHoleCourseHandicap({
+    computeNineHoleCourseHandicapRaw({
       handicapIndex: params.handicapIndex,
       ...params.courseValues,
     }),
@@ -152,7 +156,10 @@ function computeCappedCourseHandicap(params: {
 }
 
 function recalculateRowFinal(row: Row, leagueHandicapPercent: number): Row {
-  const courseHandicap = parseInputNumber(row.courseHandicap) ?? 0;
+  const courseHandicap =
+    Number.isFinite(row.courseHandicapBasis)
+      ? row.courseHandicapBasis
+      : parseInputNumber(row.courseHandicap) ?? 0;
   return {
     ...row,
     finalComputedHandicap: computeFinalComputedHandicap({
@@ -488,21 +495,27 @@ export default function AdminHandicapsPage() {
       const nextRows = players.map((player) => {
         const weekly = weeklyByPlayerId.get(player.id);
         const profileHandicapIndex = Number(player.handicap_index);
-        const seededCourseHandicap = computeCappedCourseHandicap({
+        const seededCourseHandicapRaw = computeCappedCourseHandicapRaw({
           handicapIndex: profileHandicapIndex,
           courseValues: sideCourseValues,
           handicapCap: storedWeekCap,
         });
-        const courseHandicap = Number(weekly?.course_handicap ?? seededCourseHandicap);
+        const seededCourseHandicap = Math.round(seededCourseHandicapRaw);
+        const storedCourseHandicap = weekly?.course_handicap == null ? null : Number(weekly.course_handicap);
+        const courseHandicap = storedCourseHandicap ?? seededCourseHandicap;
+        const courseHandicapBasis =
+          storedCourseHandicap != null && storedCourseHandicap !== seededCourseHandicap
+            ? storedCourseHandicap
+            : seededCourseHandicapRaw;
 
         if (!weekly) {
           seedPayload.push({
             league_week_id: selectedWeekId,
             player_id: player.id,
             handicap_index: Number(profileHandicapIndex.toFixed(1)),
-            course_handicap: Math.round(courseHandicap),
+            course_handicap: courseHandicap,
             final_computed_handicap: computeFinalComputedHandicap({
-              courseHandicap: Math.round(courseHandicap),
+              courseHandicap: courseHandicapBasis,
               leagueHandicapPercent: storedWeekPercent,
             }),
           });
@@ -513,9 +526,10 @@ export default function AdminHandicapsPage() {
           playerName: player.full_name,
           handicapIndex: formatNumber(profileHandicapIndex),
           profileHandicapIndex,
-          courseHandicap: formatNumber(Math.round(courseHandicap)),
+          courseHandicap: formatNumber(courseHandicap),
+          courseHandicapBasis,
           finalComputedHandicap: computeFinalComputedHandicap({
-            courseHandicap: Math.round(courseHandicap),
+            courseHandicap: courseHandicapBasis,
             leagueHandicapPercent: storedWeekPercent,
           }),
         };
@@ -563,7 +577,7 @@ export default function AdminHandicapsPage() {
               return recalculateRowFinal({ ...row, handicapIndex: value }, parsedLeaguePercent);
             }
 
-            const courseHandicap = computeCappedCourseHandicap({
+            const courseHandicapRaw = computeCappedCourseHandicapRaw({
               handicapIndex,
               courseValues: selectedCourseValues,
               handicapCap: parsedHandicapCap,
@@ -573,13 +587,17 @@ export default function AdminHandicapsPage() {
               {
                 ...row,
                 handicapIndex: value,
-                courseHandicap: formatNumber(courseHandicap),
+                courseHandicap: formatNumber(Math.round(courseHandicapRaw)),
+                courseHandicapBasis: courseHandicapRaw,
               },
               parsedLeaguePercent
             );
           }
 
-          return recalculateRowFinal({ ...row, courseHandicap: value }, parsedLeaguePercent);
+          return recalculateRowFinal(
+            { ...row, courseHandicap: value, courseHandicapBasis: parseInputNumber(value) ?? 0 },
+            parsedLeaguePercent
+          );
         })
       );
       setDirty(true);
@@ -611,16 +629,17 @@ export default function AdminHandicapsPage() {
             return recalculateRowFinal(row, parsedPercent);
           }
 
+          const courseHandicapRaw = computeCappedCourseHandicapRaw({
+            handicapIndex,
+            courseValues: selectedCourseValues,
+            handicapCap: parsedHandicapCap,
+          });
+
           return recalculateRowFinal(
             {
               ...row,
-              courseHandicap: formatNumber(
-                computeCappedCourseHandicap({
-                  handicapIndex,
-                  courseValues: selectedCourseValues,
-                  handicapCap: parsedHandicapCap,
-                })
-              ),
+              courseHandicap: formatNumber(Math.round(courseHandicapRaw)),
+              courseHandicapBasis: courseHandicapRaw,
             },
             parsedPercent
           );
@@ -686,6 +705,9 @@ export default function AdminHandicapsPage() {
         );
         return;
       }
+      const courseHandicapBasis = Number.isFinite(row.courseHandicapBasis)
+        ? row.courseHandicapBasis
+        : courseHandicap;
 
       payload.push({
         league_week_id: selectedWeekId,
@@ -693,7 +715,7 @@ export default function AdminHandicapsPage() {
         handicap_index: Number(handicapIndex.toFixed(1)),
         course_handicap: courseHandicap,
         final_computed_handicap: computeFinalComputedHandicap({
-          courseHandicap,
+          courseHandicap: courseHandicapBasis,
           leagueHandicapPercent: parsedLeaguePercent,
         }),
       });
@@ -757,6 +779,9 @@ export default function AdminHandicapsPage() {
     setRows((prev) =>
       prev.map((row) => {
         const parsedCourse = parseInputNumber(row.courseHandicap) ?? 0;
+        const courseHandicapBasis = Number.isFinite(row.courseHandicapBasis)
+          ? row.courseHandicapBasis
+          : parsedCourse;
         return {
           ...row,
           handicapIndex: formatNumber(parseInputNumber(row.handicapIndex) ?? 0),
@@ -764,8 +789,9 @@ export default function AdminHandicapsPage() {
             (parseInputNumber(row.handicapIndex) ?? 0).toFixed(1)
           ),
           courseHandicap: formatNumber(parsedCourse),
+          courseHandicapBasis,
           finalComputedHandicap: computeFinalComputedHandicap({
-            courseHandicap: parsedCourse,
+            courseHandicap: courseHandicapBasis,
             leagueHandicapPercent: parsedLeaguePercent,
           }),
         };

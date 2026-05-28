@@ -16,7 +16,7 @@ export function computeFinalComputedHandicap(params: {
   return Math.round((course * percent) / 100);
 }
 
-export function computeNineHoleCourseHandicap(params: {
+export function computeNineHoleCourseHandicapRaw(params: {
   handicapIndex: number;
   rating: number | null;
   slope: number | null;
@@ -33,10 +33,18 @@ export function computeNineHoleCourseHandicap(params: {
     !Number.isFinite(params.par)
   ) {
     console.warn("Missing 9-hole course rating/slope/par; falling back to half handicap index.");
-    return Math.round(handicapIndex / 2);
+    return handicapIndex / 2;
   }
 
   const nineHoleIndex = Math.round((handicapIndex / 2 + 1e-9) * 10) / 10;
-  const courseHandicap = (nineHoleIndex * params.slope) / 113 + (params.rating - params.par);
-  return Math.round(courseHandicap);
+  return (nineHoleIndex * params.slope) / 113 + (params.rating - params.par);
+}
+
+export function computeNineHoleCourseHandicap(params: {
+  handicapIndex: number;
+  rating: number | null;
+  slope: number | null;
+  par: number | null;
+}): number {
+  return Math.round(computeNineHoleCourseHandicapRaw(params));
 }

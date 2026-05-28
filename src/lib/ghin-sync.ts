@@ -1,4 +1,7 @@
-import { computeFinalComputedHandicap, computeNineHoleCourseHandicap } from "@/lib/weekly-handicap";
+import {
+  computeFinalComputedHandicap,
+  computeNineHoleCourseHandicapRaw,
+} from "@/lib/weekly-handicap";
 
 type SupabaseLike = any;
 
@@ -298,13 +301,14 @@ async function syncSelectedWeekHandicapIndexes(params: {
   for (const result of successfulResults) {
     if (!existingWeeklyPlayerIds.has(result.playerId)) continue;
 
-    const courseHandicap = applyCourseHandicapCap(
-      computeNineHoleCourseHandicap({
+    const courseHandicapRaw = applyCourseHandicapCap(
+      computeNineHoleCourseHandicapRaw({
         handicapIndex: result.handicapIndex,
         ...sideValues,
       }),
       handicapCap
     );
+    const courseHandicap = Math.round(courseHandicapRaw);
 
     const { error: weeklyUpdateError } = await supabase
       .from("weekly_handicaps")
@@ -312,7 +316,7 @@ async function syncSelectedWeekHandicapIndexes(params: {
         handicap_index: result.handicapIndex,
         course_handicap: courseHandicap,
         final_computed_handicap: computeFinalComputedHandicap({
-          courseHandicap,
+          courseHandicap: courseHandicapRaw,
           leagueHandicapPercent,
         }),
       })
