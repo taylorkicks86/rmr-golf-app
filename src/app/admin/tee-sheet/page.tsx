@@ -35,6 +35,7 @@ type Player = {
 
 type ParticipationRecord = {
   player_id: string;
+  cup: boolean | null;
 };
 
 type WeeklyTeeTimeRecord = {
@@ -128,7 +129,7 @@ function PlayerNameWithCupMarker({
   isCupPlayer: boolean;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-2">
+    <span className="inline-flex items-baseline gap-1">
       {handicap != null && (
         <span
           aria-label="Course handicap"
@@ -143,7 +144,7 @@ function PlayerNameWithCupMarker({
         <span
           aria-label="Cup player"
           title="Cup player"
-          className="text-[0.65rem] font-bold leading-none text-amber-500"
+          className="-ml-0.5 text-[0.55rem] font-bold leading-none text-amber-500"
         >
           C
         </span>
@@ -262,7 +263,7 @@ export default function AdminTeeSheetPage() {
     Promise.all([
       supabase
         .from("weekly_participation")
-        .select("player_id")
+        .select("player_id, cup")
         .eq("league_week_id", selectedWeekId)
         .eq("playing_this_week", true),
       supabase
@@ -306,6 +307,9 @@ export default function AdminTeeSheetPage() {
         weeklyHandicaps.map((row) => [row.player_id, row.course_handicap])
       );
       const activePlayerIds = Array.from(new Set(participation.map((record) => record.player_id)));
+      const weeklyCupByPlayerId = new Map(
+        participation.map((record) => [record.player_id, record.cup === true])
+      );
 
       if (activePlayerIds.length === 0) {
         setActivePlayers([]);
@@ -318,7 +322,7 @@ export default function AdminTeeSheetPage() {
 
       supabase
         .from("players")
-        .select("id, full_name, paid, cup")
+        .select("id, full_name, paid")
         .in("id", activePlayerIds)
         .order("paid", { ascending: false })
         .order("full_name")
@@ -332,11 +336,11 @@ export default function AdminTeeSheetPage() {
           }
 
           const players =
-            ((playersData as (Omit<Player, "handicap"> & { cup: boolean | null; paid: boolean | null })[]) ?? []).map((player) => ({
+            ((playersData as (Omit<Player, "handicap" | "cup"> & { paid: boolean | null })[]) ?? []).map((player) => ({
               ...player,
               handicap: weeklyHandicapByPlayerId.get(player.id) ?? null,
               paid: player.paid === true,
-              cup: player.cup === true,
+              cup: weeklyCupByPlayerId.get(player.id) ?? false,
             })) ?? [];
           const validPlayerIds = new Set(players.map((player) => player.id));
           const playerNameById = new Map(players.map((player) => [player.id, player.full_name]));

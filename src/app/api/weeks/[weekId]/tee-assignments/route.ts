@@ -39,7 +39,7 @@ export async function GET(
   const [participationRes, teeTimesRes] = await Promise.all([
     serviceSupabase
       .from("weekly_participation")
-      .select("player_id, playing_this_week")
+      .select("player_id, playing_this_week, cup")
       .eq("league_week_id", weekId)
       .in("playing_this_week", [true, false]),
     serviceSupabase
@@ -56,12 +56,17 @@ export async function GET(
   }
 
   const participationRows =
-    (participationRes.data as { player_id: string; playing_this_week: boolean | null }[] | null) ?? [];
+    (participationRes.data as
+      | { player_id: string; playing_this_week: boolean | null; cup: boolean | null }[]
+      | null) ?? [];
   const activePlayerIds = new Set(
     participationRows.filter((row) => row.playing_this_week === true).map((row) => row.player_id)
   );
   const notPlayingPlayerIds = new Set(
     participationRows.filter((row) => row.playing_this_week === false).map((row) => row.player_id)
+  );
+  const cupPlayerIds = new Set(
+    participationRows.filter((row) => row.cup === true).map((row) => row.player_id)
   );
   const assignments =
     ((teeTimesRes.data as
@@ -76,14 +81,13 @@ export async function GET(
 
   const visiblePlayerIds = Array.from(new Set([...activePlayerIds, ...notPlayingPlayerIds]));
   const playerNamesById = new Map<string, string>();
-  const cupPlayerIds = new Set<string>();
   const playerHandicapsById = new Map<string, number | null>();
 
   if (visiblePlayerIds.length > 0) {
     const [playersRes, weeklyHandicapsRes] = await Promise.all([
       serviceSupabase
         .from("players")
-        .select("id, full_name, cup")
+        .select("id, full_name")
         .in("id", visiblePlayerIds),
       serviceSupabase
         .from("weekly_handicaps")
@@ -109,14 +113,11 @@ export async function GET(
 
     (
       ((playersRes.data as
-        | { id: string; full_name: string; cup: boolean | null }[]
+        | { id: string; full_name: string }[]
         | null) ?? [])
     ).forEach((player) => {
       playerNamesById.set(player.id, player.full_name);
       playerHandicapsById.set(player.id, weeklyHandicapsById.get(player.id) ?? null);
-      if (player.cup === true) {
-        cupPlayerIds.add(player.id);
-      }
     });
   }
 

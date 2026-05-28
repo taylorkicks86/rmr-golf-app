@@ -95,7 +95,7 @@ function PlayerNameWithCupMarker({
   isCupPlayer: boolean;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-2">
+    <span className="inline-flex items-baseline gap-1">
       {handicap != null && (
         <span
           aria-label="Course handicap"
@@ -110,7 +110,7 @@ function PlayerNameWithCupMarker({
         <span
           aria-label="Cup player"
           title="Cup player"
-          className="text-[0.65rem] font-bold leading-none text-amber-500"
+          className="-ml-0.5 text-[0.55rem] font-bold leading-none text-amber-500"
         >
           C
         </span>
