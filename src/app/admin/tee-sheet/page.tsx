@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSeasonSelector } from "@/components/admin/AdminSeasonSelector";
 import { WeekControlParticipationTable } from "@/components/admin/WeekControlParticipationTable";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
+import { formatHandicapForDisplay } from "@/lib/handicap-display";
 import { createClient } from "@/lib/supabase/client";
 
 type Season = {
@@ -27,6 +28,7 @@ type LeagueWeek = {
 type Player = {
   id: string;
   full_name: string;
+  handicap: number | null;
   paid: boolean;
   cup: boolean;
 };
@@ -41,6 +43,11 @@ type WeeklyTeeTimeRecord = {
   group_number: number | null;
   position_in_group: number | null;
   notes: string | null;
+};
+
+type WeeklyHandicapRecord = {
+  player_id: string;
+  course_handicap: number | null;
 };
 
 type TeeSlot = {
@@ -109,6 +116,40 @@ function buildTargetGroupSizes(playerCount: number): number[] {
   if (playerCount === 6) return [3, 3];
   if (playerCount === 5) return [3, 2];
   return [playerCount];
+}
+
+function PlayerNameWithCupMarker({
+  name,
+  handicap,
+  isCupPlayer,
+}: {
+  name: string;
+  handicap: number | null | undefined;
+  isCupPlayer: boolean;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-2">
+      {handicap != null && (
+        <span
+          aria-label="Course handicap"
+          title="Course handicap"
+          className="min-w-7 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-center text-[0.68rem] font-semibold leading-none text-zinc-600"
+        >
+          {formatHandicapForDisplay(handicap)}
+        </span>
+      )}
+      <span>{name}</span>
+      {isCupPlayer && (
+        <span
+          aria-label="Cup player"
+          title="Cup player"
+          className="text-[0.65rem] font-bold leading-none text-amber-500"
+        >
+          C
+        </span>
+      )}
+    </span>
+  );
 }
 
 export default function AdminTeeSheetPage() {
@@ -228,7 +269,11 @@ export default function AdminTeeSheetPage() {
         .from("weekly_tee_times")
         .select("player_id, tee_time, group_number, position_in_group, notes")
         .eq("week_id", selectedWeekId),
-    ]).then(([partRes, teeTimesRes]) => {
+      supabase
+        .from("weekly_handicaps")
+        .select("player_id, course_handicap")
+        .eq("league_week_id", selectedWeekId),
+    ]).then(([partRes, teeTimesRes, weeklyHandicapsRes]) => {
       if (partRes.error) {
         setError(partRes.error.message);
         setActivePlayers([]);
@@ -245,8 +290,21 @@ export default function AdminTeeSheetPage() {
         return;
       }
 
+      if (weeklyHandicapsRes.error) {
+        setError(weeklyHandicapsRes.error.message);
+        setActivePlayers([]);
+        setSlots(createDefaultSlots());
+        setLoadingRows(false);
+        return;
+      }
+
       const participation = (partRes.data as ParticipationRecord[]) ?? [];
       const teeTimes = (teeTimesRes.data as WeeklyTeeTimeRecord[]) ?? [];
+      const weeklyHandicaps =
+        (weeklyHandicapsRes.data as WeeklyHandicapRecord[] | null) ?? [];
+      const weeklyHandicapByPlayerId = new Map(
+        weeklyHandicaps.map((row) => [row.player_id, row.course_handicap])
+      );
       const activePlayerIds = Array.from(new Set(participation.map((record) => record.player_id)));
 
       if (activePlayerIds.length === 0) {
@@ -274,8 +332,9 @@ export default function AdminTeeSheetPage() {
           }
 
           const players =
-            ((playersData as (Player & { cup: boolean | null; paid: boolean | null })[]) ?? []).map((player) => ({
+            ((playersData as (Omit<Player, "handicap"> & { cup: boolean | null; paid: boolean | null })[]) ?? []).map((player) => ({
               ...player,
+              handicap: weeklyHandicapByPlayerId.get(player.id) ?? null,
               paid: player.paid === true,
               cup: player.cup === true,
             })) ?? [];
@@ -421,8 +480,11 @@ export default function AdminTeeSheetPage() {
   );
 
   const boardGroupedByTime = useMemo(() => {
-    const grouped = new Map<string, { index: number; playerName: string }[]>(
-      TEE_TIME_OPTIONS.map((option) => [option.value, [] as { index: number; playerName: string }[]])
+    const grouped = new Map<string, { index: number; playerName: string; handicap: number | null; isCupPlayer: boolean }[]>(
+      TEE_TIME_OPTIONS.map((option) => [
+        option.value,
+        [] as { index: number; playerName: string; handicap: number | null; isCupPlayer: boolean }[],
+      ])
     );
 
     slots.forEach((slot, index) => {
@@ -438,6 +500,8 @@ export default function AdminTeeSheetPage() {
       grouped.get(slot.teeTime)?.push({
         index,
         playerName: player.full_name,
+        handicap: player.handicap,
+        isCupPlayer: player.cup,
       });
     });
 
@@ -862,7 +926,13 @@ export default function AdminTeeSheetPage() {
                       key={`slot-${slot.value}-${row.index}`}
                       className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm"
                     >
-                      <p className="font-medium text-zinc-900">{row.playerName}</p>
+                      <p className="font-medium text-zinc-900">
+                        <PlayerNameWithCupMarker
+                          name={row.playerName}
+                          handicap={row.handicap}
+                          isCupPlayer={row.isCupPlayer}
+                        />
+                      </p>
                     </div>
                   ))}
                 </div>

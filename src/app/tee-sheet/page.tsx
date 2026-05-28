@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/ui/PageHeader";
 import { resolveWeekDropdownState } from "@/lib/getDashboardWeek";
+import { formatHandicapForDisplay } from "@/lib/handicap-display";
 import { isPlayableSeasonWeek } from "@/lib/season-weeks";
 import { createClient } from "@/lib/supabase/client";
 
@@ -26,11 +27,15 @@ type LeagueWeek = {
 type Player = {
   id: string;
   full_name: string;
+  handicap: number | null;
+  cup: boolean;
 };
 
 type TeeAssignmentRecord = {
   player_id: string;
   player_name: string;
+  handicap?: number | null;
+  cup?: boolean | null;
   tee_time: string;
   group_number: number | null;
   position_in_group: number | null;
@@ -39,6 +44,7 @@ type TeeAssignmentRecord = {
 type TeeSheetPlayerRecord = {
   player_id: string;
   player_name: string;
+  cup?: boolean | null;
 };
 
 type Row = {
@@ -77,6 +83,40 @@ function toNumberOrNull(value: string): number | null {
   }
 
   return parsed;
+}
+
+function PlayerNameWithCupMarker({
+  name,
+  handicap,
+  isCupPlayer,
+}: {
+  name: string;
+  handicap?: number | null;
+  isCupPlayer: boolean;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-2">
+      {handicap != null && (
+        <span
+          aria-label="Course handicap"
+          title="Course handicap"
+          className="min-w-7 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-center text-[0.68rem] font-semibold leading-none text-zinc-600"
+        >
+          {formatHandicapForDisplay(handicap)}
+        </span>
+      )}
+      <span>{name}</span>
+      {isCupPlayer && (
+        <span
+          aria-label="Cup player"
+          title="Cup player"
+          className="text-[0.65rem] font-bold leading-none text-amber-500"
+        >
+          C
+        </span>
+      )}
+    </span>
+  );
 }
 
 export default function PublicTeeSheetPage() {
@@ -196,6 +236,8 @@ export default function PublicTeeSheetPage() {
           player: {
             id: assignment.player_id,
             full_name: assignment.player_name,
+            handicap: assignment.handicap ?? null,
+            cup: assignment.cup === true,
           } as Player,
           teeTime: normalizeTeeTimeValue(assignment.tee_time),
           groupNumber: assignment.group_number != null ? String(assignment.group_number) : "",
@@ -359,7 +401,13 @@ export default function PublicTeeSheetPage() {
                             key={`slot-${slot.value}-${row.player.id}`}
                             className="rounded-md border border-emerald-900/15 bg-white px-3 py-2 text-sm"
                           >
-                            <p className="font-medium text-zinc-900">{row.player.full_name}</p>
+                            <p className="font-medium text-zinc-900">
+                              <PlayerNameWithCupMarker
+                                name={row.player.full_name}
+                                handicap={row.player.handicap}
+                                isCupPlayer={row.player.cup}
+                              />
+                            </p>
                           </div>
                         );
                       })}
@@ -392,7 +440,12 @@ export default function PublicTeeSheetPage() {
                     <tbody className="divide-y divide-zinc-200">
                       {playingPlayers.map((player) => (
                         <tr key={`playing-${player.player_id}`}>
-                          <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
+                          <td className="py-2 font-medium text-zinc-900">
+                            <PlayerNameWithCupMarker
+                              name={player.player_name}
+                              isCupPlayer={player.cup === true}
+                            />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -417,7 +470,12 @@ export default function PublicTeeSheetPage() {
                     <tbody className="divide-y divide-zinc-200">
                       {notPlayingPlayers.map((player) => (
                         <tr key={`not-playing-${player.player_id}`}>
-                          <td className="py-2 font-medium text-zinc-900">{player.player_name}</td>
+                          <td className="py-2 font-medium text-zinc-900">
+                            <PlayerNameWithCupMarker
+                              name={player.player_name}
+                              isCupPlayer={player.cup === true}
+                            />
+                          </td>
                         </tr>
                       ))}
                     </tbody>

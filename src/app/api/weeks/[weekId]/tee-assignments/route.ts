@@ -76,19 +76,47 @@ export async function GET(
 
   const visiblePlayerIds = Array.from(new Set([...activePlayerIds, ...notPlayingPlayerIds]));
   const playerNamesById = new Map<string, string>();
+  const cupPlayerIds = new Set<string>();
+  const playerHandicapsById = new Map<string, number | null>();
 
   if (visiblePlayerIds.length > 0) {
-    const playersRes = await serviceSupabase
-      .from("players")
-      .select("id, full_name")
-      .in("id", visiblePlayerIds);
+    const [playersRes, weeklyHandicapsRes] = await Promise.all([
+      serviceSupabase
+        .from("players")
+        .select("id, full_name, cup")
+        .in("id", visiblePlayerIds),
+      serviceSupabase
+        .from("weekly_handicaps")
+        .select("player_id, course_handicap")
+        .eq("league_week_id", weekId)
+        .in("player_id", visiblePlayerIds),
+    ]);
 
     if (playersRes.error) {
       return NextResponse.json({ error: playersRes.error.message }, { status: 500 });
     }
+    if (weeklyHandicapsRes.error) {
+      return NextResponse.json({ error: weeklyHandicapsRes.error.message }, { status: 500 });
+    }
 
-    (((playersRes.data as { id: string; full_name: string }[] | null) ?? [])).forEach((player) => {
+    const weeklyHandicapsById = new Map(
+      (
+        (weeklyHandicapsRes.data as
+          | { player_id: string; course_handicap: number | null }[]
+          | null) ?? []
+      ).map((row) => [row.player_id, row.course_handicap])
+    );
+
+    (
+      ((playersRes.data as
+        | { id: string; full_name: string; cup: boolean | null }[]
+        | null) ?? [])
+    ).forEach((player) => {
       playerNamesById.set(player.id, player.full_name);
+      playerHandicapsById.set(player.id, weeklyHandicapsById.get(player.id) ?? null);
+      if (player.cup === true) {
+        cupPlayerIds.add(player.id);
+      }
     });
   }
 
@@ -96,14 +124,20 @@ export async function GET(
     assignments: assignments.map((row) => ({
       ...row,
       player_name: playerNamesById.get(row.player_id) ?? "",
+      handicap: playerHandicapsById.get(row.player_id) ?? null,
+      cup: cupPlayerIds.has(row.player_id),
     })),
     playingPlayers: Array.from(activePlayerIds).map((playerId) => ({
       player_id: playerId,
       player_name: playerNamesById.get(playerId) ?? "",
+      handicap: playerHandicapsById.get(playerId) ?? null,
+      cup: cupPlayerIds.has(playerId),
     })),
     notPlayingPlayers: Array.from(notPlayingPlayerIds).map((playerId) => ({
       player_id: playerId,
       player_name: playerNamesById.get(playerId) ?? "",
+      handicap: playerHandicapsById.get(playerId) ?? null,
+      cup: cupPlayerIds.has(playerId),
     })),
   });
 }
