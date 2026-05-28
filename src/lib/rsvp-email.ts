@@ -21,6 +21,8 @@ type TeeSheetAssignment = {
   teeTimeLabel: string;
   groupLabel: string;
   playerName: string;
+  courseHandicap: number | null;
+  cup: boolean;
 };
 
 type TeeSheetEmailParams = {
@@ -37,6 +39,18 @@ type CommissionerEmailParams = {
 };
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 14;
+
+function formatHandicapForDisplay(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "";
+  }
+
+  if (value < 0) {
+    return `+${Math.abs(value)}`;
+  }
+
+  return String(value);
+}
 
 function base64UrlEncode(input: string): string {
   return Buffer.from(input, "utf8").toString("base64url");
@@ -202,12 +216,31 @@ export function buildTeeSheetEmail({
     .map(([teeTimeLabel, rows]) => {
       const playerRows = rows
         .map(
-          (assignment) => `
+          (assignment) => {
+            const handicapLabel = formatHandicapForDisplay(assignment.courseHandicap);
+            const handicapCell = handicapLabel
+              ? `<td width="34" valign="middle" style="padding:0 8px 0 0;">
+                                          <span style="display:inline-block;min-width:22px;border:1px solid #e4e4e7;background:#fafafa;border-radius:3px;padding:2px 4px;text-align:center;font-size:10px;line-height:12px;color:#52525b;font-weight:800;">${escapeHtml(handicapLabel)}</span>
+                                        </td>`
+              : "";
+            const cupMarker = assignment.cup
+              ? `<span aria-label="Cup player" title="Cup player" style="display:inline-block;margin-left:2px;font-size:8px;line-height:8px;color:#f59e0b;font-weight:800;vertical-align:super;">C</span>`
+              : "";
+
+            return `
                                   <tr>
-                                    <td style="padding:10px 12px;border:1px solid #dfe8df;background:#ffffff;border-radius:6px;font-size:14px;line-height:20px;color:#171717;font-weight:700;">
-                                      ${escapeHtml(assignment.playerName)}
+                                    <td style="padding:10px 12px;border:1px solid #dfe8df;background:#ffffff;border-radius:6px;">
+                                      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                                        <tr>
+                                          ${handicapCell}
+                                          <td valign="middle" style="padding:0;font-size:14px;line-height:20px;color:#171717;font-weight:700;">
+                                            ${escapeHtml(assignment.playerName)}${cupMarker}
+                                          </td>
+                                        </tr>
+                                      </table>
                                     </td>
-                                  </tr>`
+                                  </tr>`;
+          }
         )
         .join("");
 

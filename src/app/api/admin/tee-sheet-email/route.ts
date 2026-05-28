@@ -28,6 +28,7 @@ type Player = {
 
 type ParticipationRecord = {
   player_id: string;
+  cup: boolean | null;
 };
 
 type TeeTimeRecord = {
@@ -35,6 +36,11 @@ type TeeTimeRecord = {
   tee_time: string;
   group_number: number | null;
   position_in_group: number | null;
+};
+
+type WeeklyHandicapRecord = {
+  player_id: string;
+  course_handicap: number | null;
 };
 
 type SendResult = {
@@ -183,17 +189,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cannot email a tee sheet for a cancelled week." }, { status: 400 });
   }
 
-  const [{ data: participationData, error: participationError }, { data: teeTimesData, error: teeTimesError }] =
-    await Promise.all([
+  const [
+    { data: participationData, error: participationError },
+    { data: teeTimesData, error: teeTimesError },
+    { data: weeklyHandicapsData, error: weeklyHandicapsError },
+  ] = await Promise.all([
       supabase
         .from("weekly_participation")
-        .select("player_id")
+        .select("player_id, cup")
         .eq("league_week_id", body.weekId)
         .eq("playing_this_week", true),
       supabase
         .from("weekly_tee_times")
         .select("player_id, tee_time, group_number, position_in_group")
         .eq("week_id", body.weekId),
+      supabase
+        .from("weekly_handicaps")
+        .select("player_id, course_handicap")
+        .eq("league_week_id", body.weekId),
     ]);
 
   if (participationError) {
@@ -202,10 +215,20 @@ export async function POST(request: NextRequest) {
   if (teeTimesError) {
     return NextResponse.json({ error: teeTimesError.message }, { status: 500 });
   }
+  if (weeklyHandicapsError) {
+    return NextResponse.json({ error: weeklyHandicapsError.message }, { status: 500 });
+  }
 
   const participation = (participationData as ParticipationRecord[] | null) ?? [];
   const teeTimes = (teeTimesData as TeeTimeRecord[] | null) ?? [];
+  const weeklyHandicaps = (weeklyHandicapsData as WeeklyHandicapRecord[] | null) ?? [];
   const playingPlayerIds = new Set(participation.map((record) => record.player_id));
+  const weeklyCupByPlayerId = new Map(
+    participation.map((record) => [record.player_id, record.cup === true])
+  );
+  const weeklyHandicapByPlayerId = new Map(
+    weeklyHandicaps.map((row) => [row.player_id, row.course_handicap])
+  );
   const visiblePlayerIds = Array.from(playingPlayerIds);
 
   if (playingPlayerIds.size === 0) {
@@ -244,6 +267,8 @@ export async function POST(request: NextRequest) {
       teeTimeLabel: formatTeeTime(assignment.tee_time),
       groupLabel: assignment.group_number == null ? "Group" : `Group ${assignment.group_number}`,
       playerName: playerById.get(assignment.player_id)?.full_name ?? "Player",
+      courseHandicap: weeklyHandicapByPlayerId.get(assignment.player_id) ?? null,
+      cup: weeklyCupByPlayerId.get(assignment.player_id) ?? false,
     }));
 
   if (assignments.length === 0) {
