@@ -22,6 +22,7 @@ type LeagueWeek = {
   is_finalized: boolean;
   tee_sheet_published: boolean;
   status: "open" | "finalized" | "cancelled" | "rained_out" | null;
+  side_to_play: "front" | "back";
 };
 
 type Player = {
@@ -83,6 +84,10 @@ function toNumberOrNull(value: string): number | null {
   }
 
   return parsed;
+}
+
+function formatSideToPlay(side: LeagueWeek["side_to_play"]): string {
+  return side === "back" ? "Back 9" : "Front 9";
 }
 
 function PlayerNameWithCupMarker({
@@ -155,7 +160,7 @@ export default function PublicTeeSheetPage() {
 
         supabase
           .from("league_weeks")
-          .select("id, week_number, week_date, play_date, is_finalized, tee_sheet_published, status")
+          .select("id, week_number, week_date, play_date, is_finalized, tee_sheet_published, status, side_to_play")
           .eq("season_id", season.id)
           .order("week_number", { ascending: true })
           .then(async ({ data, error: err }) => {
@@ -361,7 +366,7 @@ export default function PublicTeeSheetPage() {
               <option value="">Select a week…</option>
               {weeks.map((week) => (
                 <option key={week.id} value={week.id}>
-                  Week {week.week_number} — {week.play_date ?? week.week_date}
+                  Week {week.week_number} — {week.play_date ?? week.week_date} · {formatSideToPlay(week.side_to_play)}
                 </option>
               ))}
             </select>
@@ -375,8 +380,13 @@ export default function PublicTeeSheetPage() {
         )}
 
         <section className={`${cardClass} mb-6`}>
-          <div className={cardHeaderClass}>
+          <div className={`${cardHeaderClass} flex items-center justify-between gap-3`}>
             <h2 className="text-lg font-semibold text-white sm:text-xl">Tee Sheet Board</h2>
+            {selectedWeek && (
+              <span className="shrink-0 rounded border border-white/20 bg-white/10 px-2 py-1 text-xs font-semibold text-emerald-50">
+                {formatSideToPlay(selectedWeek.side_to_play)}
+              </span>
+            )}
           </div>
           <div className={cardBodyClass}>
             {!selectedWeek?.tee_sheet_published ? (
