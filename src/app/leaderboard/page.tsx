@@ -30,6 +30,7 @@ type Season = {
 type LeaderboardRow = {
   rankLabel: string;
   full_name: string;
+  cup: boolean;
   scoreLabel: string;
   thruLabel: string;
   gross: number | null;
@@ -47,6 +48,11 @@ type Player = {
 type WeeklyHandicapRecord = {
   player_id: string;
   final_computed_handicap: number;
+};
+
+type WeeklyParticipationRecord = {
+  player_id: string;
+  cup: boolean | null;
 };
 
 type HoleScore = {
@@ -175,7 +181,7 @@ export default function LeaderboardPage() {
     Promise.all([
       supabase
         .from("weekly_participation")
-        .select("player_id")
+        .select("player_id, cup")
         .eq("league_week_id", selectedWeekId)
         .eq("playing_this_week", true),
       supabase
@@ -225,8 +231,10 @@ export default function LeaderboardPage() {
         return;
       }
 
-      const participationIds = ((participationRes.data as { player_id: string }[] | null) ?? []).map(
-        (r) => r.player_id
+      const participation = (participationRes.data as WeeklyParticipationRecord[] | null) ?? [];
+      const participationIds = participation.map((r) => r.player_id);
+      const cupByPlayerId = new Map(
+        participation.map((record) => [record.player_id, record.cup === true])
       );
       const scoreIds = ((weeklyScoresRes.data as { player_id: string }[] | null) ?? []).map(
         (r) => r.player_id
@@ -315,6 +323,7 @@ export default function LeaderboardPage() {
         return {
           rankLabel: "-",
           full_name: player.full_name,
+          cup: cupByPlayerId.get(player.id) ?? false,
           scoreLabel: formatScoreLabel(netToPar),
           thruLabel: holesCompleted === 0 ? "Not started" : `Thru ${holesCompleted}`,
           gross: live.grossTotal,
@@ -477,7 +486,18 @@ export default function LeaderboardPage() {
                   <tr key={row.full_name} className="hover:bg-zinc-50/50">
                     <td className="px-px py-1.5 text-center text-xs font-semibold text-zinc-900 sm:px-1">{row.rankLabel}</td>
                     <td className="min-w-0 px-px py-1.5 text-xs font-medium text-zinc-900 sm:px-1">
-                      <span className="block min-w-0 truncate">{row.full_name}</span>
+                      <span className="flex min-w-0 items-baseline gap-1">
+                        <span className="min-w-0 truncate">{row.full_name}</span>
+                        {row.cup && (
+                          <span
+                            aria-label="Cup player"
+                            title="Cup player"
+                            className="shrink-0 text-[0.55rem] font-bold leading-none text-amber-500"
+                          >
+                            C
+                          </span>
+                        )}
+                      </span>
                     </td>
                     <td
                       className={`px-px py-1.5 text-center text-xs font-semibold sm:px-1 ${
