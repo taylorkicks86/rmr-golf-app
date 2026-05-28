@@ -21,7 +21,7 @@ type TeeSheetAssignment = {
   teeTimeLabel: string;
   groupLabel: string;
   playerName: string;
-  courseHandicap: number | null;
+  cupHandicap: number | null;
   cup: boolean;
 };
 
@@ -217,7 +217,7 @@ export function buildTeeSheetEmail({
       const playerRows = rows
         .map(
           (assignment) => {
-            const handicapLabel = formatHandicapForDisplay(assignment.courseHandicap);
+            const handicapLabel = formatHandicapForDisplay(assignment.cupHandicap);
             const handicapCell = handicapLabel
               ? `<td width="34" valign="middle" style="padding:0 8px 0 0;">
                                           <span style="display:inline-block;min-width:22px;border:1px solid #e4e4e7;background:#fafafa;border-radius:3px;padding:2px 4px;text-align:center;font-size:10px;line-height:12px;color:#52525b;font-weight:800;">${escapeHtml(handicapLabel)}</span>

@@ -91,7 +91,7 @@ export async function GET(
         .in("id", visiblePlayerIds),
       serviceSupabase
         .from("weekly_handicaps")
-        .select("player_id, course_handicap")
+        .select("player_id, final_computed_handicap")
         .eq("league_week_id", weekId)
         .in("player_id", visiblePlayerIds),
     ]);
@@ -106,9 +106,9 @@ export async function GET(
     const weeklyHandicapsById = new Map(
       (
         (weeklyHandicapsRes.data as
-          | { player_id: string; course_handicap: number | null }[]
+          | { player_id: string; final_computed_handicap: number | null }[]
           | null) ?? []
-      ).map((row) => [row.player_id, row.course_handicap])
+      ).map((row) => [row.player_id, row.final_computed_handicap])
     );
 
     (

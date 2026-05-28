@@ -40,7 +40,7 @@ type TeeTimeRecord = {
 
 type WeeklyHandicapRecord = {
   player_id: string;
-  course_handicap: number | null;
+  final_computed_handicap: number | null;
 };
 
 type SendResult = {
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
         .eq("week_id", body.weekId),
       supabase
         .from("weekly_handicaps")
-        .select("player_id, course_handicap")
+        .select("player_id, final_computed_handicap")
         .eq("league_week_id", body.weekId),
     ]);
 
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     participation.map((record) => [record.player_id, record.cup === true])
   );
   const weeklyHandicapByPlayerId = new Map(
-    weeklyHandicaps.map((row) => [row.player_id, row.course_handicap])
+    weeklyHandicaps.map((row) => [row.player_id, row.final_computed_handicap])
   );
   const visiblePlayerIds = Array.from(playingPlayerIds);
 
@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
       teeTimeLabel: formatTeeTime(assignment.tee_time),
       groupLabel: assignment.group_number == null ? "Group" : `Group ${assignment.group_number}`,
       playerName: playerById.get(assignment.player_id)?.full_name ?? "Player",
-      courseHandicap: weeklyHandicapByPlayerId.get(assignment.player_id) ?? null,
+      cupHandicap: weeklyHandicapByPlayerId.get(assignment.player_id) ?? null,
       cup: weeklyCupByPlayerId.get(assignment.player_id) ?? false,
     }));
 

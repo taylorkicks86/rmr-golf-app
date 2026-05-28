@@ -48,7 +48,7 @@ type WeeklyTeeTimeRecord = {
 
 type WeeklyHandicapRecord = {
   player_id: string;
-  course_handicap: number | null;
+  final_computed_handicap: number | null;
 };
 
 type TeeSlot = {
@@ -132,8 +132,8 @@ function PlayerNameWithCupMarker({
     <span className="inline-flex items-baseline gap-1">
       {handicap != null && (
         <span
-          aria-label="Course handicap"
-          title="Course handicap"
+          aria-label="Cup handicap"
+          title="Cup handicap"
           className="min-w-7 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-center text-[0.68rem] font-semibold leading-none text-zinc-600"
         >
           {formatHandicapForDisplay(handicap)}
@@ -272,7 +272,7 @@ export default function AdminTeeSheetPage() {
         .eq("week_id", selectedWeekId),
       supabase
         .from("weekly_handicaps")
-        .select("player_id, course_handicap")
+        .select("player_id, final_computed_handicap")
         .eq("league_week_id", selectedWeekId),
     ]).then(([partRes, teeTimesRes, weeklyHandicapsRes]) => {
       if (partRes.error) {
@@ -304,7 +304,7 @@ export default function AdminTeeSheetPage() {
       const weeklyHandicaps =
         (weeklyHandicapsRes.data as WeeklyHandicapRecord[] | null) ?? [];
       const weeklyHandicapByPlayerId = new Map(
-        weeklyHandicaps.map((row) => [row.player_id, row.course_handicap])
+        weeklyHandicaps.map((row) => [row.player_id, row.final_computed_handicap])
       );
       const activePlayerIds = Array.from(new Set(participation.map((record) => record.player_id)));
       const weeklyCupByPlayerId = new Map(

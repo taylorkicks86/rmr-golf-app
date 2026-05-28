@@ -98,8 +98,8 @@ function PlayerNameWithCupMarker({
     <span className="inline-flex items-baseline gap-1">
       {handicap != null && (
         <span
-          aria-label="Course handicap"
-          title="Course handicap"
+          aria-label="Cup handicap"
+          title="Cup handicap"
           className="min-w-7 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-center text-[0.68rem] font-semibold leading-none text-zinc-600"
         >
           {formatHandicapForDisplay(handicap)}
