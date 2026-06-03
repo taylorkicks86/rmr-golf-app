@@ -16,6 +16,7 @@ type ParticipationRecord = {
   id: string;
   player_id: string;
   playing_this_week: boolean | null;
+  attendance_status: string | null;
   cup: boolean;
 };
 
@@ -157,6 +158,7 @@ export function WeekControlParticipationTable({
       const attendanceStatus =
         nextPlaying === true ? "playing" : nextPlaying === false ? "not_playing" : "no_response";
       const enforcedCup = row.player.cup && nextPlaying === true ? resolvedCup : false;
+      const previous = row.participation;
       if (row.participation) {
         const { error: updateError } = await supabase
           .from("weekly_participation")
@@ -186,6 +188,39 @@ export function WeekControlParticipationTable({
         }
       }
 
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { data: actorPlayer } = user?.id
+        ? await supabase
+            .from("players")
+            .select("id, is_admin")
+            .eq("auth_user_id", user.id)
+            .maybeSingle()
+        : { data: null };
+      const actor = actorPlayer as { id?: string; is_admin?: boolean } | null;
+      const { error: auditError } = await supabase.from("rsvp_events").insert({
+        player_id: row.player.id,
+        league_week_id: selectedWeekId,
+        choice: nextPlaying === true ? "yes" : nextPlaying === false ? "no" : null,
+        event_source: "admin_week_control",
+        result: "success",
+        requested_playing_this_week: nextPlaying,
+        previous_playing_this_week: previous?.playing_this_week ?? null,
+        previous_attendance_status: previous?.attendance_status ?? null,
+        previous_cup: previous?.cup ?? null,
+        persisted_playing_this_week: nextPlaying,
+        persisted_attendance_status: attendanceStatus,
+        persisted_cup: enforcedCup,
+        user_agent: window.navigator.userAgent,
+        actor_user_id: user?.id ?? null,
+        actor_player_id: actor?.id ?? null,
+        actor_role: actor?.is_admin === true ? "admin" : "self",
+      });
+      if (auditError) {
+        console.error("Failed to log admin attendance event:", auditError.message);
+      }
+
       setRows((prev) =>
         prev.map((current) =>
           current.player.id === row.player.id
@@ -194,7 +229,12 @@ export function WeekControlParticipationTable({
                 playing_this_week: nextPlaying,
                 cup: enforcedCup,
                 participation: current.participation
-                  ? { ...current.participation, playing_this_week: nextPlaying, cup: enforcedCup }
+                  ? {
+                      ...current.participation,
+                      playing_this_week: nextPlaying,
+                      attendance_status: attendanceStatus,
+                      cup: enforcedCup,
+                    }
                   : current.participation,
               }
             : current

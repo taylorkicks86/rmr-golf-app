@@ -20,6 +20,21 @@ type LeagueWeek = {
   is_finalized: boolean;
 };
 
+type ParticipationSnapshot = {
+  playing_this_week: boolean | null;
+  attendance_status: string | null;
+  cup: boolean | null;
+};
+
+function getRequestIp(request: NextRequest): string | null {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  return (
+    request.headers.get("x-real-ip") ??
+    request.headers.get("cf-connecting-ip") ??
+    (forwardedFor ? forwardedFor.split(",")[0]?.trim() ?? null : null)
+  );
+}
+
 export async function PUT(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as UpdateBody | null;
   if (!body || typeof body.weekId !== "string" || ![true, false, null].includes(body.playingThisWeek)) {
@@ -110,6 +125,19 @@ export async function PUT(request: NextRequest) {
     { auth: { persistSession: false, autoRefreshToken: false } }
   );
 
+  const { data: actorPlayer } = await serviceSupabase
+    .from("players")
+    .select("id, is_admin")
+    .eq("auth_user_id", user.id)
+    .maybeSingle();
+  const { data: previousData } = await serviceSupabase
+    .from("weekly_participation")
+    .select("playing_this_week, attendance_status, cup")
+    .eq("league_week_id", body.weekId)
+    .eq("player_id", playerId)
+    .maybeSingle();
+  const previous = previousData as ParticipationSnapshot | null;
+
   const isCupPlayer = Boolean((playerData as { cup: boolean }).cup);
   let persistedCup = isCupPlayer && body.playingThisWeek === true;
   if (body.playingThisWeek === true && isCupPlayer) {
@@ -141,16 +169,41 @@ export async function PUT(request: NextRequest) {
       },
       { onConflict: "league_week_id,player_id" }
     )
-    .select("playing_this_week, cup")
+    .select("playing_this_week, attendance_status, cup")
     .single();
 
   if (upsertError) {
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
+  const persisted = upserted as ParticipationSnapshot;
+  const actor = actorPlayer as { id?: string; is_admin?: boolean } | null;
+  const { error: auditError } = await serviceSupabase.from("rsvp_events").insert({
+    player_id: playerId,
+    league_week_id: body.weekId,
+    choice: body.playingThisWeek === true ? "yes" : body.playingThisWeek === false ? "no" : null,
+    event_source: "attendance_page",
+    result: "success",
+    requested_playing_this_week: body.playingThisWeek,
+    previous_playing_this_week: previous?.playing_this_week ?? null,
+    previous_attendance_status: previous?.attendance_status ?? null,
+    previous_cup: previous?.cup ?? null,
+    persisted_playing_this_week: persisted.playing_this_week,
+    persisted_attendance_status: persisted.attendance_status,
+    persisted_cup: persisted.cup,
+    user_agent: request.headers.get("user-agent"),
+    ip_address: getRequestIp(request),
+    actor_user_id: user.id,
+    actor_player_id: actor?.id ?? null,
+    actor_role: actor?.is_admin === true ? "admin" : "self",
+  });
+  if (auditError) {
+    console.error("Failed to log attendance page event:", auditError.message);
+  }
+
   return NextResponse.json({
     success: true,
-    playing_this_week: (upserted as { playing_this_week: boolean | null }).playing_this_week,
-    cup: (upserted as { cup: boolean }).cup,
+    playing_this_week: persisted.playing_this_week,
+    cup: persisted.cup,
   });
 }
