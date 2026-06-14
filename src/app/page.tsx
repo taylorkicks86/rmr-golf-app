@@ -43,7 +43,8 @@ type WeeklyParticipation = {
 type WeeklyScoreRow = {
   league_week_id: string;
   player_id: string;
-  gross_score: number;
+  gross_score: number | null;
+  did_not_finish?: boolean | null;
 };
 
 type WeeklyHandicapByWeekRow = {
@@ -376,14 +377,16 @@ async function buildDashboardData(player: Player): Promise<{ data: DashboardData
   let lastRounds: LastRoundResult[] = [];
   const { data: allPlayerScoresData, error: allPlayerScoresError } = await supabase
     .from("weekly_scores")
-    .select("league_week_id, gross_score")
+    .select("league_week_id, gross_score, did_not_finish")
     .eq("player_id", player.id);
 
   if (allPlayerScoresError) {
     return { data: null, error: allPlayerScoresError.message };
   }
 
-  const allPlayerScores = (allPlayerScoresData as { league_week_id: string; gross_score: number }[] | null) ?? [];
+  const allPlayerScores = (
+    (allPlayerScoresData as WeeklyScoreRow[] | null) ?? []
+  ).filter((score) => score.did_not_finish !== true && score.gross_score != null);
   const allScoredWeekIds = Array.from(new Set(allPlayerScores.map((score) => score.league_week_id)));
   if (allScoredWeekIds.length > 0) {
     const [roundWeeksRes, weeklyHandicapsRes] = await Promise.all([

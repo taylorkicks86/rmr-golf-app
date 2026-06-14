@@ -34,7 +34,8 @@ type HoleScoreRecord = {
 
 type WeeklyScoreRecord = {
   player_id: string;
-  gross_score: number;
+  gross_score: number | null;
+  did_not_finish?: boolean | null;
   is_scorecard_signed: boolean;
   scorecard_signed_at: string | null;
 };
@@ -187,7 +188,7 @@ export async function GET(request: NextRequest) {
         .eq("league_week_id", selectedWeekId),
       serviceSupabase
         .from("weekly_scores")
-        .select("player_id, gross_score, is_scorecard_signed, scorecard_signed_at")
+        .select("player_id, gross_score, did_not_finish, is_scorecard_signed, scorecard_signed_at")
         .eq("league_week_id", selectedWeekId),
       serviceSupabase
         .from("weekly_tee_times")
@@ -225,6 +226,7 @@ export async function GET(request: NextRequest) {
     existingGross: number | null;
     isScorecardSigned: boolean;
     scorecardSignedAt: string | null;
+    didNotFinish: boolean;
   }> = [];
 
   if (orderedActivePlayerIds.length > 0) {
@@ -255,7 +257,15 @@ export async function GET(request: NextRequest) {
       ]))
     );
     const holesByPlayerId = new Map<string, string[]>();
-    const grossByPlayerId = new Map(scores.map((record) => [record.player_id, Number(record.gross_score)]));
+    const grossByPlayerId = new Map(
+      scores.map((record) => [
+        record.player_id,
+        record.gross_score == null ? null : Number(record.gross_score),
+      ])
+    );
+    const dnfByPlayerId = new Map(
+      scores.map((record) => [record.player_id, record.did_not_finish === true])
+    );
     const signedByPlayerId = new Map(
       scores.map((record) => [
         record.player_id,
@@ -286,6 +296,7 @@ export async function GET(request: NextRequest) {
         },
         holes: holesByPlayerId.get(player.id) ?? buildEmptyHoles(),
         existingGross: grossByPlayerId.get(player.id) ?? null,
+        didNotFinish: dnfByPlayerId.get(player.id) ?? false,
         isScorecardSigned: signedByPlayerId.get(player.id)?.isSigned ?? false,
         scorecardSignedAt: signedByPlayerId.get(player.id)?.signedAt ?? null,
       })));

@@ -20,7 +20,8 @@ export type WeeklyParticipationForCup = {
 
 export type WeeklyGrossScore = {
   player_id: string;
-  gross_score: number;
+  gross_score: number | null;
+  did_not_finish?: boolean | null;
 };
 
 export type CupTeamMembership = {
@@ -54,8 +55,7 @@ export function computeWeeklyCupResults(params: {
       ? new Set(scoringPlayerIds.filter((id) => eligibleIds.has(id)))
       : null;
 
-  const participationByPlayer = new Map(participation.map((row) => [row.player_id, row]));
-  const scoreByPlayer = new Map(scores.map((row) => [row.player_id, Number(row.gross_score)]));
+  const scoreByPlayer = new Map(scores.map((row) => [row.player_id, row]));
   const playerById = new Map(eligiblePlayers.map((player) => [player.id, player]));
   const playerIdByNormalizedName = new Map(
     eligiblePlayers.map((player) => [player.full_name.trim().toLowerCase(), player.id])
@@ -71,9 +71,9 @@ export function computeWeeklyCupResults(params: {
   const activeScorerByTeamId = new Map<string, string>();
   const isValidScorer = (playerId: string) => {
     if (!eligibleIds.has(playerId)) return false;
-    const hasScore = scoreByPlayer.has(playerId);
-    if (!hasScore) return false;
-    return true;
+    const score = scoreByPlayer.get(playerId);
+    if (!score) return false;
+    return score.did_not_finish === true || score.gross_score != null;
   };
 
   const pickBestValidScorer = (memberIds: string[]): string | null => {
@@ -81,18 +81,29 @@ export function computeWeeklyCupResults(params: {
       .filter((memberId) => isValidScorer(memberId))
       .map((memberId) => {
         const player = playerById.get(memberId);
-        const gross = scoreByPlayer.get(memberId) ?? 0;
-        const net = player ? Number((gross - Number(player.handicap_index)).toFixed(2)) : Number.MAX_SAFE_INTEGER;
+        const score = scoreByPlayer.get(memberId);
+        const didNotFinish = score?.did_not_finish === true;
+        const gross = score?.gross_score == null ? null : Number(score.gross_score);
+        const net =
+          didNotFinish || gross == null
+            ? Number.MAX_SAFE_INTEGER
+            : player
+              ? Number((gross - Number(player.handicap_index)).toFixed(2))
+              : Number.MAX_SAFE_INTEGER;
         return {
           player_id: memberId,
           gross,
           net,
+          didNotFinish,
           full_name: player?.full_name ?? memberId,
         };
       })
       .sort((a, b) => {
+        if (a.didNotFinish !== b.didNotFinish) return a.didNotFinish ? 1 : -1;
         if (a.net !== b.net) return a.net - b.net;
-        if (a.gross !== b.gross) return a.gross - b.gross;
+        if ((a.gross ?? Number.MAX_SAFE_INTEGER) !== (b.gross ?? Number.MAX_SAFE_INTEGER)) {
+          return (a.gross ?? Number.MAX_SAFE_INTEGER) - (b.gross ?? Number.MAX_SAFE_INTEGER);
+        }
         return a.full_name.localeCompare(b.full_name);
       });
 
@@ -150,19 +161,30 @@ export function computeWeeklyCupResults(params: {
   const rankedTeams = Array.from(activeScorerByTeamId.entries())
     .map(([teamId, scorerId]) => {
       const scorer = playerById.get(scorerId);
-      const gross = scoreByPlayer.get(scorerId) ?? 0;
-      const net = scorer ? Number((gross - Number(scorer.handicap_index)).toFixed(2)) : 0;
+      const score = scoreByPlayer.get(scorerId);
+      const didNotFinish = score?.did_not_finish === true;
+      const gross = score?.gross_score == null ? null : Number(score.gross_score);
+      const net =
+        didNotFinish || gross == null
+          ? Number.MAX_SAFE_INTEGER
+          : scorer
+            ? Number((gross - Number(scorer.handicap_index)).toFixed(2))
+            : Number.MAX_SAFE_INTEGER;
       return {
         team_id: teamId,
         scorer_id: scorerId,
         gross,
         net,
+        didNotFinish,
         scorer_name: scorer?.full_name ?? scorerId,
       };
     })
     .sort((a, b) => {
+      if (a.didNotFinish !== b.didNotFinish) return a.didNotFinish ? 1 : -1;
       if (a.net !== b.net) return a.net - b.net;
-      if (a.gross !== b.gross) return a.gross - b.gross;
+      if ((a.gross ?? Number.MAX_SAFE_INTEGER) !== (b.gross ?? Number.MAX_SAFE_INTEGER)) {
+        return (a.gross ?? Number.MAX_SAFE_INTEGER) - (b.gross ?? Number.MAX_SAFE_INTEGER);
+      }
       return a.scorer_name.localeCompare(b.scorer_name);
     });
 
@@ -249,7 +271,8 @@ export function computeWeeklyCupResults(params: {
       const teamPoints = pointsByTeamId.get(teamId);
       const scorerId = activeScorerByTeamId.get(teamId);
       const scorer = scorerId ? playerById.get(scorerId) : null;
-      const gross = scorerId ? scoreByPlayer.get(scorerId) ?? null : null;
+      const score = scorerId ? scoreByPlayer.get(scorerId) ?? null : null;
+      const gross = score?.gross_score == null ? null : Number(score.gross_score);
       const net =
         scorer && gross != null
           ? Number((gross - Number(scorer.handicap_index)).toFixed(2))

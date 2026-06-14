@@ -34,7 +34,8 @@ type LeagueWeek = {
 type WeeklyScoreRow = {
   league_week_id: string;
   player_id: string;
-  gross_score: number;
+  gross_score: number | null;
+  did_not_finish?: boolean | null;
 };
 
 type WeeklyHandicapByWeekRow = {
@@ -227,7 +228,7 @@ export default async function PlayerProfilePage({ params }: Props) {
       const [scoresRes, playersRes, pointsRes, weeklyHandicapsRes] = await Promise.all([
         supabase
           .from("weekly_scores")
-          .select("league_week_id, player_id, gross_score")
+          .select("league_week_id, player_id, gross_score, did_not_finish")
           .in("league_week_id", finalizedWeekIds),
         supabase.from("players").select("id, full_name, cup"),
         supabase
@@ -304,7 +305,9 @@ export default async function PlayerProfilePage({ params }: Props) {
         );
       }
 
-      const scores = (scoresRes.data as WeeklyScoreRow[]) ?? [];
+      const scores = ((scoresRes.data as WeeklyScoreRow[]) ?? []).filter(
+        (score) => score.did_not_finish !== true && score.gross_score != null
+      );
       const players = (playersRes.data as PlayerRecord[]) ?? [];
       const weeklyCupResults =
         ((pointsRes.data as { league_week_id: string; player_id: string; points_earned: number }[] | null) ??
@@ -330,7 +333,7 @@ export default async function PlayerProfilePage({ params }: Props) {
       finalizedWeeks.forEach((week) => {
         const weekScores = (scoresByWeek.get(week.id) ?? []).sort((a, b) => {
           if (a.gross_score !== b.gross_score) {
-            return a.gross_score - b.gross_score;
+            return Number(a.gross_score) - Number(b.gross_score);
           }
           const aName = playerNameById.get(a.player_id) ?? "";
           const bName = playerNameById.get(b.player_id) ?? "";
@@ -347,8 +350,8 @@ export default async function PlayerProfilePage({ params }: Props) {
               weekId: week.id,
               weekNumber: week.week_number,
               weekDate: week.week_date,
-              gross: weekScore.gross_score,
-              net: Number((weekScore.gross_score - handicap).toFixed(1)),
+              gross: Number(weekScore.gross_score),
+              net: Number((Number(weekScore.gross_score) - handicap).toFixed(1)),
             });
           }
         });
@@ -369,7 +372,7 @@ export default async function PlayerProfilePage({ params }: Props) {
 
   const { data: allPlayerScoresData, error: allPlayerScoresError } = await supabase
     .from("weekly_scores")
-    .select("league_week_id, player_id, gross_score")
+    .select("league_week_id, player_id, gross_score, did_not_finish")
     .eq("player_id", player.id);
 
   if (allPlayerScoresError) {
@@ -388,7 +391,9 @@ export default async function PlayerProfilePage({ params }: Props) {
     );
   }
 
-  const allPlayerScores = (allPlayerScoresData as WeeklyScoreRow[] | null) ?? [];
+  const allPlayerScores = ((allPlayerScoresData as WeeklyScoreRow[] | null) ?? []).filter(
+    (score) => score.did_not_finish !== true && score.gross_score != null
+  );
   const allScoredWeekIds = Array.from(new Set(allPlayerScores.map((score) => score.league_week_id)));
 
   if (allScoredWeekIds.length > 0) {

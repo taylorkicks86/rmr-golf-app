@@ -77,8 +77,9 @@ type WeeklyParticipationCupRecord = {
 
 type WeeklyCupScoreRecord = {
   player_id: string;
-  gross_score: number;
-  is_scorecard_signed: boolean;
+  gross_score: number | null;
+  did_not_finish?: boolean | null;
+  is_scorecard_signed?: boolean | null;
 };
 
 type WeeklyCupResultSnapshotRecord = {
@@ -93,7 +94,7 @@ type CupResultRow = {
   teamId: string;
   team: string;
   officialScorer: string | null;
-  status: "Signed" | "Scored" | "DNP";
+  status: "Signed" | "Scored" | "DNF" | "DNP";
   finishPosition: number | null;
   isTiedFinish: boolean;
   gross: number | null;
@@ -111,6 +112,7 @@ type WeekSummary = {
 
 function getPreviewStatusClass(status: CupResultRow["status"]): string {
   if (status === "Signed") return "bg-emerald-100 text-emerald-700";
+  if (status === "DNF") return "bg-amber-100 text-amber-900";
   if (status === "Scored") return "bg-amber-100 text-amber-800";
   return "bg-rose-100 text-rose-700";
 }
@@ -394,7 +396,7 @@ export default function AdminFinalizeWeekPage() {
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("weekly_scores")
-        .select("player_id, gross_score, is_scorecard_signed")
+        .select("player_id, gross_score, did_not_finish, is_scorecard_signed")
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("weekly_handicaps")
@@ -492,7 +494,11 @@ export default function AdminFinalizeWeekPage() {
         const liveCupRows = computeWeeklyCupResults({
           players: playersForCupScoring,
           participation,
-          scores: scores.map((score) => ({ player_id: score.player_id, gross_score: score.gross_score })),
+          scores: scores.map((score) => ({
+            player_id: score.player_id,
+            gross_score: score.gross_score,
+            did_not_finish: score.did_not_finish === true,
+          })),
           teamMembers: members,
           scoringPlayerIds: officialScorerIds,
           scoringSettings: cupScoringSettings,
@@ -561,7 +567,7 @@ export default function AdminFinalizeWeekPage() {
           list.push(member.player_id);
           membersByTeamId.set(member.cup_team_id, list);
         });
-        const scoreByPlayerId = new Map(scores.map((score) => [score.player_id, score.gross_score]));
+        const scoreByPlayerId = new Map(scores.map((score) => [score.player_id, score]));
         const traceTeam =
           teams.find((team) => !rowByTeamId.has(team.id) && (membersByTeamId.get(team.id) ?? []).some((id) => scoreByPlayerId.has(id))) ??
           teams[0];
@@ -576,7 +582,11 @@ export default function AdminFinalizeWeekPage() {
             teamMemberPlayerIds: memberIds,
             playerScoreRowsFound: memberIds
               .filter((id) => scoreByPlayerId.has(id))
-              .map((id) => ({ playerId: id, gross: scoreByPlayerId.get(id) })),
+              .map((id) => ({
+                playerId: id,
+                gross: scoreByPlayerId.get(id)?.gross_score ?? null,
+                didNotFinish: scoreByPlayerId.get(id)?.did_not_finish === true,
+              })),
             computedTeamResult: liveByTeamId.get(traceTeam.id) ?? null,
             persistedTeamResultBeforeFinalize: persistedByTeamId.get(traceTeam.id) ?? null,
             uiDisplayedTeamResult: rowByTeamId.get(traceTeam.id) ?? null,
@@ -590,10 +600,13 @@ export default function AdminFinalizeWeekPage() {
             const officialScorer = officialScorerId
               ? playerById.get(officialScorerId)?.full_name ?? null
               : null;
+            const didNotFinish = row?.finish_position != null && row.gross_score == null;
             const status: CupResultRow["status"] =
               row?.finish_position == null
                 ? "DNP"
-                : signedByPlayerId.get(row.player_id) === true
+                : didNotFinish
+                  ? "DNF"
+                  : signedByPlayerId.get(row.player_id) === true
                   ? "Signed"
                   : "Scored";
             const pointsSource: CupResultRow["pointsSource"] =
@@ -646,7 +659,7 @@ export default function AdminFinalizeWeekPage() {
         .from("weekly_participation")
         .select("player_id, cup, playing_this_week, cup_scorer_for_team_id")
         .eq("league_week_id", selectedWeekId),
-      supabase.from("weekly_scores").select("player_id, gross_score").eq("league_week_id", selectedWeekId),
+      supabase.from("weekly_scores").select("player_id, gross_score, did_not_finish").eq("league_week_id", selectedWeekId),
       supabase.from("cup_teams").select("id, name").eq("season_id", selectedWeek.season_id),
       supabase.from("cup_team_members").select("cup_team_id, player_id").eq("season_id", selectedWeek.season_id),
       supabase
@@ -688,7 +701,7 @@ export default function AdminFinalizeWeekPage() {
     const players = (playersRes.data as PlayerCupData[]) ?? [];
     const participation =
       ((participationRes.data as WeeklyParticipationCupRecord[]) ?? []);
-    const scores = (scoresRes.data as { player_id: string; gross_score: number }[]) ?? [];
+    const scores = (scoresRes.data as WeeklyCupScoreRecord[]) ?? [];
     const teams = (teamsRes.data as CupTeam[]) ?? [];
     const members = (membersRes.data as CupTeamMember[]) ?? [];
     const weeklyHandicaps =
@@ -708,7 +721,7 @@ export default function AdminFinalizeWeekPage() {
       list.push(member.player_id);
       membersByTeamId.set(member.cup_team_id, list);
     });
-    const scoreByPlayerId = new Map(scores.map((score) => [score.player_id, score.gross_score]));
+    const scoreByPlayerId = new Map(scores.map((score) => [score.player_id, score]));
     const traceTeam =
       teams.find((team) => (membersByTeamId.get(team.id) ?? []).some((id) => scoreByPlayerId.has(id))) ??
       teams[0];
@@ -791,7 +804,11 @@ export default function AdminFinalizeWeekPage() {
         teamMemberPlayerIds: teamMemberIds,
         playerScoreRowsFound: teamMemberIds
           .filter((id) => scoreByPlayerId.has(id))
-          .map((id) => ({ playerId: id, gross: scoreByPlayerId.get(id) })),
+          .map((id) => ({
+            playerId: id,
+            gross: scoreByPlayerId.get(id)?.gross_score ?? null,
+            didNotFinish: scoreByPlayerId.get(id)?.did_not_finish === true,
+          })),
         computedTeamResult: computedByTeam.get(traceTeam.id) ?? null,
         persistedTeamResultBeforeFinalize: existingByTeam.get(traceTeam.id) ?? null,
       });

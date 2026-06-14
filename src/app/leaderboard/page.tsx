@@ -31,6 +31,7 @@ type LeaderboardRow = {
   rankLabel: string;
   full_name: string;
   cup: boolean;
+  didNotFinish: boolean;
   scoreLabel: string;
   thruLabel: string;
   gross: number | null;
@@ -59,6 +60,11 @@ type HoleScore = {
   player_id: string;
   hole_number: number;
   strokes: number;
+};
+
+type WeeklyScoreRecord = {
+  player_id: string;
+  did_not_finish?: boolean | null;
 };
 
 type ActiveHole = {
@@ -186,7 +192,7 @@ export default function LeaderboardPage() {
         .eq("playing_this_week", true),
       supabase
         .from("weekly_scores")
-        .select("player_id")
+        .select("player_id, did_not_finish")
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("hole_scores")
@@ -236,7 +242,11 @@ export default function LeaderboardPage() {
       const cupByPlayerId = new Map(
         participation.map((record) => [record.player_id, record.cup === true])
       );
-      const scoreIds = ((weeklyScoresRes.data as { player_id: string }[] | null) ?? []).map(
+      const weeklyScores = (weeklyScoresRes.data as WeeklyScoreRecord[] | null) ?? [];
+      const didNotFinishByPlayerId = new Map(
+        weeklyScores.map((record) => [record.player_id, record.did_not_finish === true])
+      );
+      const scoreIds = weeklyScores.map(
         (r) => r.player_id
       );
       const holeScoreIds = ((holeScoresRes.data as HoleScore[] | null) ?? []).map((r) => r.player_id);
@@ -319,21 +329,29 @@ export default function LeaderboardPage() {
           return sum + (hole.par ?? 0);
         }, 0);
         const netToPar = live.netTotal == null ? null : live.netTotal - parThrough;
+        const didNotFinish = didNotFinishByPlayerId.get(player.id) ?? false;
 
         return {
           rankLabel: "-",
           full_name: player.full_name,
           cup: cupByPlayerId.get(player.id) ?? false,
-          scoreLabel: formatScoreLabel(netToPar),
-          thruLabel: holesCompleted === 0 ? "Not started" : `Thru ${holesCompleted}`,
-          gross: live.grossTotal,
-          net: live.netTotal,
-          netToPar,
+          didNotFinish,
+          scoreLabel: didNotFinish ? "DNF" : formatScoreLabel(netToPar),
+          thruLabel: didNotFinish ? "DNF" : holesCompleted === 0 ? "Not started" : `Thru ${holesCompleted}`,
+          gross: didNotFinish ? null : live.grossTotal,
+          net: didNotFinish ? null : live.netTotal,
+          netToPar: didNotFinish ? null : netToPar,
           holesCompleted,
         } as LeaderboardRow;
       });
 
       const sorted = [...computed].sort((a, b) => {
+        const statusA = a.netToPar != null ? 0 : a.didNotFinish ? 1 : 2;
+        const statusB = b.netToPar != null ? 0 : b.didNotFinish ? 1 : 2;
+        if (statusA !== statusB) return statusA - statusB;
+        if (a.didNotFinish && b.didNotFinish) {
+          return a.full_name.localeCompare(b.full_name);
+        }
         if (a.netToPar == null && b.netToPar == null) {
           return a.full_name.localeCompare(b.full_name);
         }
@@ -347,6 +365,9 @@ export default function LeaderboardPage() {
       let previousScore: number | null = null;
       let currentRank = 0;
       const ranked = sorted.map((row, index) => {
+        if (row.didNotFinish) {
+          return { ...row, rankLabel: "DNF" };
+        }
         if (row.netToPar == null) {
           return { ...row, rankLabel: "-" };
         }

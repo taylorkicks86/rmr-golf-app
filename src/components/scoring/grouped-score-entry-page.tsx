@@ -53,7 +53,8 @@ type HoleScoreRecord = {
 
 type WeeklyScoreRecord = {
   player_id: string;
-  gross_score: number;
+  gross_score: number | null;
+  did_not_finish?: boolean | null;
   is_scorecard_signed: boolean;
   scorecard_signed_at: string | null;
 };
@@ -82,8 +83,16 @@ type Row = {
   player: Player;
   holes: string[];
   existingGross: number | null;
+  didNotFinish: boolean;
   isScorecardSigned: boolean;
   scorecardSignedAt: string | null;
+};
+
+type WeeklyScorePayload = {
+  league_week_id: string;
+  player_id: string;
+  gross_score: number | null;
+  did_not_finish: boolean;
 };
 
 type MemberScoreEntryPayload = {
@@ -256,6 +265,7 @@ export function GroupedScoreEntryPage({
   const [teeAssignments, setTeeAssignments] = useState<TeeAssignmentRecord[]>([]);
   const [teeSheetPublished, setTeeSheetPublished] = useState(true);
   const [activeHoles, setActiveHoles] = useState<ActiveHole[]>(DEFAULT_ACTIVE_HOLES);
+  const [openDnfPlayerId, setOpenDnfPlayerId] = useState<string | null>(null);
 
   const applyMemberScoreEntryPayload = useCallback((payload: MemberScoreEntryPayload) => {
     setCurrentPlayerId(payload.currentPlayerId);
@@ -496,7 +506,7 @@ export function GroupedScoreEntryPage({
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("weekly_scores")
-        .select("player_id, gross_score, is_scorecard_signed, scorecard_signed_at")
+        .select("player_id, gross_score, did_not_finish, is_scorecard_signed, scorecard_signed_at")
         .eq("league_week_id", selectedWeekId),
       fetch(`/api/weeks/${selectedWeekId}/tee-assignments`, { cache: "no-store" }).then(async (response) => {
         const body = (await response.json().catch(() => null)) as
@@ -634,7 +644,13 @@ export function GroupedScoreEntryPage({
           );
           const holesByPlayerId = new Map<string, string[]>();
           const grossByPlayerId = new Map(
-            scores.map((record) => [record.player_id, Number(record.gross_score)])
+            scores.map((record) => [
+              record.player_id,
+              record.gross_score == null ? null : Number(record.gross_score),
+            ])
+          );
+          const dnfByPlayerId = new Map(
+            scores.map((record) => [record.player_id, record.did_not_finish === true])
           );
           const signedByPlayerId = new Map(
             scores.map((record) => [
@@ -666,6 +682,7 @@ export function GroupedScoreEntryPage({
               },
               holes: holesByPlayerId.get(player.id) ?? buildEmptyHoles(),
               existingGross: grossByPlayerId.get(player.id) ?? null,
+              didNotFinish: dnfByPlayerId.get(player.id) ?? false,
               isScorecardSigned: signedByPlayerId.get(player.id)?.isSigned ?? false,
               scorecardSignedAt: signedByPlayerId.get(player.id)?.signedAt ?? null,
             }));
@@ -879,9 +896,9 @@ export function GroupedScoreEntryPage({
       return;
     }
 
-    const hasAllNineScoresForCurrentPlayer = currentSigningRow.holes.every(
-      (value) => value.trim() !== ""
-    );
+    const hasAllNineScoresForCurrentPlayer =
+      currentSigningRow.didNotFinish ||
+      currentSigningRow.holes.every((value) => value.trim() !== "");
     if (!hasAllNineScoresForCurrentPlayer) {
       setSaveError("You must enter all 9 holes for your score before signing.");
       return;
@@ -940,7 +957,7 @@ export function GroupedScoreEntryPage({
       if (isFinalized || !scorecardsVisible || !editablePlayerIds.has(playerId)) return;
       setRows((prev) =>
         prev.map((row) => {
-          if (row.player.id !== playerId) {
+          if (row.player.id !== playerId || row.didNotFinish) {
             return row;
           }
           const nextHoles = [...row.holes];
@@ -951,6 +968,29 @@ export function GroupedScoreEntryPage({
       setDirty(true);
     },
     [isFinalized, editablePlayerIds, scorecardsVisible]
+  );
+
+  const toggleDidNotFinish = useCallback(
+    (playerId: string) => {
+      if (isFinalized || !scorecardsVisible || !editablePlayerIds.has(playerId)) return;
+      setRows((prev) =>
+        prev.map((row) => {
+          if (row.player.id !== playerId) {
+            return row;
+          }
+          const nextDidNotFinish = !row.didNotFinish;
+          return {
+            ...row,
+            holes: nextDidNotFinish ? buildEmptyHoles() : row.holes,
+            existingGross: nextDidNotFinish ? null : row.existingGross,
+            didNotFinish: nextDidNotFinish,
+          };
+        })
+      );
+      setDirty(true);
+      setOpenDnfPlayerId(null);
+    },
+    [editablePlayerIds, isFinalized, scorecardsVisible]
   );
 
   const saveScores = useCallback(async () => {
@@ -983,8 +1023,11 @@ export function GroupedScoreEntryPage({
     const supabase = createClient();
     const activePlayerIds = editableRows.map((row) => row.player.id);
 
-    const holePayload = editableRows.flatMap((row) =>
-      row.holes.flatMap((value, holeIndex) => {
+    const holePayload = editableRows.flatMap((row) => {
+      if (row.didNotFinish) {
+        return [];
+      }
+      return row.holes.flatMap((value, holeIndex) => {
         const trimmed = value.trim();
         if (trimmed === "") {
           return [];
@@ -998,10 +1041,21 @@ export function GroupedScoreEntryPage({
             strokes: Number.parseInt(trimmed, 10),
           },
         ];
-      })
-    );
+      });
+    });
 
-    const completeWeeklyPayload = editableRows.flatMap((row) => {
+    const completeWeeklyPayload = editableRows.flatMap<WeeklyScorePayload>((row) => {
+      if (row.didNotFinish) {
+        return [
+          {
+            league_week_id: selectedWeekId,
+            player_id: row.player.id,
+            gross_score: null,
+            did_not_finish: true,
+          },
+        ];
+      }
+
       const entered = row.holes.map((value) => value.trim());
       if (entered.some((value) => value === "")) {
         return [];
@@ -1013,6 +1067,7 @@ export function GroupedScoreEntryPage({
           league_week_id: selectedWeekId,
           player_id: row.player.id,
           gross_score: grossScore,
+          did_not_finish: false,
         },
       ];
     });
@@ -1172,14 +1227,39 @@ export function GroupedScoreEntryPage({
                 return (
                   <div
                     key={`${section.key}-${row.player.id}`}
-                    className="border-b border-zinc-300 px-2 py-2 transition-colors hover:bg-zinc-50/60"
+                    className={`border-b border-zinc-300 px-2 py-2 transition-colors hover:bg-zinc-50/60 ${
+                      row.didNotFinish ? "bg-amber-50/50" : ""
+                    }`}
                   >
                     <div className={`${SCORE_ROW_CLASS} items-start`}>
                       <div className="space-y-1.5">
                         <div className="space-y-1">
-                          <h3 className="text-sm font-semibold leading-tight text-zinc-900">
-                            {row.player.full_name}
-                          </h3>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenDnfPlayerId((prev) => (prev === row.player.id ? null : row.player.id))
+                              }
+                              className="text-left text-sm font-semibold leading-tight text-zinc-900 underline-offset-2 hover:underline disabled:cursor-default disabled:no-underline"
+                              disabled={!sectionEditable || row.isScorecardSigned}
+                            >
+                              {row.player.full_name}
+                            </button>
+                            {row.didNotFinish && (
+                              <span className="inline-flex rounded-sm border border-amber-400 bg-amber-100 px-1 py-0.5 text-[9px] font-bold uppercase leading-none text-amber-800">
+                                DNF
+                              </span>
+                            )}
+                          </div>
+                          {openDnfPlayerId === row.player.id && sectionEditable && !row.isScorecardSigned && (
+                            <button
+                              type="button"
+                              onClick={() => toggleDidNotFinish(row.player.id)}
+                              className="inline-flex rounded-sm border border-amber-500 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 hover:bg-amber-100"
+                            >
+                              {row.didNotFinish ? "Undo DNF" : "Did Not Finish"}
+                            </button>
+                          )}
                           <div>
                             <span className="inline-flex rounded-sm border border-emerald-900/25 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900/85">
                               {formatHandicapForDisplay(strokesReceived)}
@@ -1187,8 +1267,12 @@ export function GroupedScoreEntryPage({
                           </div>
                         </div>
                         <div className="flex items-center gap-2 whitespace-nowrap text-[10px] leading-tight text-zinc-600 sm:text-xs">
-                          <span className="font-semibold text-zinc-700">Gross: {grossDisplay ?? "-"}</span>
-                          <span className="font-semibold text-emerald-800">Net: {netDisplay ?? "-"}</span>
+                          <span className="font-semibold text-zinc-700">
+                            Gross: {row.didNotFinish ? "DNF" : grossDisplay ?? "-"}
+                          </span>
+                          <span className="font-semibold text-emerald-800">
+                            Net: {row.didNotFinish ? "DNF" : netDisplay ?? "-"}
+                          </span>
                         </div>
                       </div>
                       <div className="min-w-0">
@@ -1202,7 +1286,7 @@ export function GroupedScoreEntryPage({
                                 max={12}
                                 step={1}
                                 value={holeValue}
-                                disabled={!sectionEditable || row.isScorecardSigned}
+                                disabled={!sectionEditable || row.isScorecardSigned || row.didNotFinish}
                                 onChange={(event) =>
                                   onHoleChange(row.player.id, holeIndex, event.target.value)
                                 }
@@ -1219,7 +1303,11 @@ export function GroupedScoreEntryPage({
                                   key={`${section.key}-${row.player.id}-sc-${hole.hole_number}`}
                                   className="aspect-square flex items-center justify-center border border-emerald-900/25 bg-white text-base leading-none"
                                 >
-                                  {scoreCell ? renderNetScoreIndicator(scoreCell) : null}
+                                  {row.didNotFinish ? (
+                                    <span className="text-[9px] font-semibold text-amber-800">DNF</span>
+                                  ) : scoreCell ? (
+                                    renderNetScoreIndicator(scoreCell)
+                                  ) : null}
                                 </div>
                               );
                             })}
@@ -1308,10 +1396,39 @@ export function GroupedScoreEntryPage({
 
                 return (
                   <Fragment key={`${section.key}-${row.player.id}`}>
-                    <tr className="border-t border-zinc-200 transition-colors hover:bg-zinc-50">
+                    <tr
+                      className={`border-t border-zinc-200 transition-colors hover:bg-zinc-50 ${
+                        row.didNotFinish ? "bg-amber-50/50" : ""
+                      }`}
+                    >
                       <td className="w-40 px-3 py-1.5 align-top text-sm font-medium text-zinc-900 sm:w-44">
                         <div className="space-y-1">
-                          <span className="block">{row.player.full_name}</span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenDnfPlayerId((prev) => (prev === row.player.id ? null : row.player.id))
+                              }
+                              className="text-left font-medium underline-offset-2 hover:underline disabled:cursor-default disabled:no-underline"
+                              disabled={!sectionEditable}
+                            >
+                              {row.player.full_name}
+                            </button>
+                            {row.didNotFinish && (
+                              <span className="inline-flex rounded-sm border border-amber-400 bg-amber-100 px-1 py-0.5 text-[9px] font-bold uppercase leading-none text-amber-800">
+                                DNF
+                              </span>
+                            )}
+                          </div>
+                          {openDnfPlayerId === row.player.id && sectionEditable && (
+                            <button
+                              type="button"
+                              onClick={() => toggleDidNotFinish(row.player.id)}
+                              className="inline-flex rounded-sm border border-amber-500 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 hover:bg-amber-100"
+                            >
+                              {row.didNotFinish ? "Undo DNF" : "Did Not Finish"}
+                            </button>
+                          )}
                           <span className="inline-flex rounded-sm border border-emerald-900/25 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900/85">
                             {formatHandicapForDisplay(strokesReceived)}
                           </span>
@@ -1328,7 +1445,7 @@ export function GroupedScoreEntryPage({
                             max={12}
                             step={1}
                             value={holeValue}
-                            disabled={!sectionEditable}
+                            disabled={!sectionEditable || row.didNotFinish}
                             onChange={(event) =>
                               onHoleChange(row.player.id, holeIndex, event.target.value)
                             }
@@ -1347,7 +1464,11 @@ export function GroupedScoreEntryPage({
                             key={`${section.key}-${row.player.id}-sc-${hole.hole_number}`}
                             className="px-0.5 pb-1 text-center sm:px-1"
                           >
-                            {scoreCell ? renderNetScoreIndicator(scoreCell) : null}
+                            {row.didNotFinish ? (
+                              <span className="text-[9px] font-semibold text-amber-800">DNF</span>
+                            ) : scoreCell ? (
+                              renderNetScoreIndicator(scoreCell)
+                            ) : null}
                           </td>
                         );
                       })}
@@ -1357,8 +1478,8 @@ export function GroupedScoreEntryPage({
                         colSpan={activeHoles.length + 1}
                         className="px-3 pb-1.5 text-right text-[10px] font-medium text-zinc-500"
                       >
-                        Gross: {grossDisplay ?? "-"}{" "}
-                        <span className="ml-3">Net: {netDisplay ?? "-"}</span>
+                        Gross: {row.didNotFinish ? "DNF" : grossDisplay ?? "-"}{" "}
+                        <span className="ml-3">Net: {row.didNotFinish ? "DNF" : netDisplay ?? "-"}</span>
                       </td>
                     </tr>
                   </Fragment>

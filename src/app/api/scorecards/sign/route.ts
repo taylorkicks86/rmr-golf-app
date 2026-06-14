@@ -86,22 +86,36 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You can only sign scorecards for your own group." }, { status: 403 });
   }
 
-  const { data: holeScores, error: holeScoresError } = await serviceSupabase
-    .from("hole_scores")
-    .select("hole_number, strokes")
-    .eq("league_week_id", body.weekId)
-    .eq("player_id", body.playerId);
+  const [{ data: weeklyScore, error: weeklyScoreError }, { data: holeScores, error: holeScoresError }] =
+    await Promise.all([
+      serviceSupabase
+        .from("weekly_scores")
+        .select("gross_score, did_not_finish")
+        .eq("league_week_id", body.weekId)
+        .eq("player_id", body.playerId)
+        .maybeSingle(),
+      serviceSupabase
+        .from("hole_scores")
+        .select("hole_number, strokes")
+        .eq("league_week_id", body.weekId)
+        .eq("player_id", body.playerId),
+    ]);
+
+  if (weeklyScoreError) {
+    return NextResponse.json({ error: weeklyScoreError.message }, { status: 500 });
+  }
 
   if (holeScoresError) {
     return NextResponse.json({ error: holeScoresError.message }, { status: 500 });
   }
 
   const entered = (holeScores as { hole_number: number; strokes: number }[] | null) ?? [];
-  if (entered.length < 9) {
+  const isDidNotFinish = (weeklyScore as { did_not_finish?: boolean } | null)?.did_not_finish === true;
+  if (!isDidNotFinish && entered.length < 9) {
     return NextResponse.json({ error: "All 9 hole scores must be entered before signing." }, { status: 400 });
   }
 
-  const grossScore = entered.reduce((sum, row) => sum + Number(row.strokes), 0);
+  const grossScore = isDidNotFinish ? null : entered.reduce((sum, row) => sum + Number(row.strokes), 0);
   const now = new Date().toISOString();
 
   const { error: upsertError } = await serviceSupabase
@@ -111,6 +125,7 @@ export async function POST(request: NextRequest) {
         league_week_id: body.weekId,
         player_id: body.playerId,
         gross_score: grossScore,
+        did_not_finish: isDidNotFinish,
         is_scorecard_signed: true,
         scorecard_signed_at: now,
       },
