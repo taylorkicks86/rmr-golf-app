@@ -346,8 +346,8 @@ export default function LeaderboardPage() {
       });
 
       const sorted = [...computed].sort((a, b) => {
-        const statusA = a.netToPar != null ? 0 : a.didNotFinish ? 1 : 2;
-        const statusB = b.netToPar != null ? 0 : b.didNotFinish ? 1 : 2;
+        const statusA = a.didNotFinish ? 2 : a.netToPar != null ? 0 : 1;
+        const statusB = b.didNotFinish ? 2 : b.netToPar != null ? 0 : 1;
         if (statusA !== statusB) return statusA - statusB;
         if (a.didNotFinish && b.didNotFinish) {
           return a.full_name.localeCompare(b.full_name);

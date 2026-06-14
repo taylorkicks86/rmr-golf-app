@@ -88,6 +88,7 @@ type WeeklyCupResultSnapshotRecord = {
   net_score: number | null;
   finish_position: number | null;
   points_earned: number;
+  did_not_finish?: boolean | null;
 };
 
 type CupResultRow = {
@@ -404,7 +405,7 @@ export default function AdminFinalizeWeekPage() {
         .eq("league_week_id", selectedWeekId),
       supabase
         .from("weekly_cup_results")
-        .select("player_id, gross_score, net_score, finish_position, points_earned")
+        .select("player_id, gross_score, net_score, finish_position, points_earned, did_not_finish")
         .eq("league_week_id", selectedWeekId),
     ]).then(
       ([
@@ -510,6 +511,7 @@ export default function AdminFinalizeWeekPage() {
               net_score: row.net_score,
               finish_position: row.finish_position,
               points_earned: row.points_earned,
+              did_not_finish: row.did_not_finish === true,
             }))
           : liveCupRows;
 
@@ -600,7 +602,7 @@ export default function AdminFinalizeWeekPage() {
             const officialScorer = officialScorerId
               ? playerById.get(officialScorerId)?.full_name ?? null
               : null;
-            const didNotFinish = row?.finish_position != null && row.gross_score == null;
+            const didNotFinish = row?.did_not_finish === true;
             const status: CupResultRow["status"] =
               row?.finish_position == null
                 ? "DNP"
@@ -728,7 +730,7 @@ export default function AdminFinalizeWeekPage() {
 
     const { data: existingCupRowsBefore } = await supabase
       .from("weekly_cup_results")
-      .select("player_id, gross_score, net_score, finish_position, points_earned")
+      .select("player_id, gross_score, net_score, finish_position, points_earned, did_not_finish")
       .eq("league_week_id", selectedWeekId);
 
     const { scorerByTeam, ambiguityErrors } = resolveOfficialScorerByTeam({
@@ -834,6 +836,7 @@ export default function AdminFinalizeWeekPage() {
           net_score: row.net_score,
           finish_position: row.finish_position,
           points_earned: Math.round(Number(row.points_earned ?? 0)),
+          did_not_finish: row.did_not_finish === true,
         })),
         { onConflict: "league_week_id,player_id" }
       );
@@ -848,7 +851,7 @@ export default function AdminFinalizeWeekPage() {
     if (traceTeam) {
       const { data: existingCupRowsAfter } = await supabase
         .from("weekly_cup_results")
-        .select("player_id, gross_score, net_score, finish_position, points_earned")
+        .select("player_id, gross_score, net_score, finish_position, points_earned, did_not_finish")
         .eq("league_week_id", selectedWeekId);
       const existingByTeamAfter = new Map<string, WeeklyCupResultSnapshotRecord>();
       (((existingCupRowsAfter as WeeklyCupResultSnapshotRecord[] | null) ?? [])).forEach((row) => {

@@ -35,6 +35,7 @@ export type WeeklyCupResultRow = {
   net_score: number | null;
   finish_position: number | null;
   points_earned: number;
+  did_not_finish?: boolean;
 };
 
 export function computeWeeklyCupResults(params: {
@@ -61,12 +62,24 @@ export function computeWeeklyCupResults(params: {
     eligiblePlayers.map((player) => [player.full_name.trim().toLowerCase(), player.id])
   );
   const membersByTeamId = new Map<string, string[]>();
+  const teamIdByPlayerId = new Map<string, string>();
   teamMembers.forEach((member) => {
     const existing = membersByTeamId.get(member.cup_team_id) ?? [];
     existing.push(member.player_id);
     membersByTeamId.set(member.cup_team_id, existing);
+    teamIdByPlayerId.set(member.player_id, member.cup_team_id);
   });
   const teamIds = Array.from(membersByTeamId.keys());
+  const activeTeamIds = new Set<string>();
+  participation.forEach((row) => {
+    if (row.playing_this_week !== true || row.cup !== true || !eligibleIds.has(row.player_id)) {
+      return;
+    }
+    const teamId = teamIdByPlayerId.get(row.player_id);
+    if (teamId) {
+      activeTeamIds.add(teamId);
+    }
+  });
 
   const activeScorerByTeamId = new Map<string, string>();
   const isValidScorer = (playerId: string) => {
@@ -201,7 +214,12 @@ export function computeWeeklyCupResults(params: {
       index += 1;
     }
 
-    const slotPositions = Array.from({ length: tieGroup.length }, (_, offset) => positionCursor + offset);
+    const isDnfTieGroup = tieGroup.every((team) => team.didNotFinish);
+    const finishPosition =
+      isDnfTieGroup && activeTeamIds.size > 0
+        ? Math.max(positionCursor, activeTeamIds.size - tieGroup.length + 1)
+        : positionCursor;
+    const slotPositions = Array.from({ length: tieGroup.length }, (_, offset) => finishPosition + offset);
     const slotPoints = slotPositions.reduce(
       (sum, position) => sum + pointsForCupPosition(position, scoringSettings),
       0
@@ -210,7 +228,7 @@ export function computeWeeklyCupResults(params: {
 
     tieGroup.forEach((team) => {
       pointsByTeamId.set(team.team_id, {
-        finishPosition: positionCursor,
+        finishPosition,
         pointsEarned: sharedPoints,
       });
     });
@@ -220,7 +238,14 @@ export function computeWeeklyCupResults(params: {
         occupiedPositions.add(position);
       }
     });
-    positionCursor += tieGroup.length;
+    positionCursor = finishPosition + tieGroup.length;
+  }
+
+  const activePositionFloor = Math.max(positionCursor - 1, activeTeamIds.size);
+  for (let position = 1; position <= activePositionFloor; position += 1) {
+    if (position <= scoringSettings.scoringPositions) {
+      occupiedPositions.add(position);
+    }
   }
 
   const dnpTeamIds = teamIds.filter((teamId) => !pointsByTeamId.has(teamId));
@@ -264,27 +289,30 @@ export function computeWeeklyCupResults(params: {
   });
 
   return teamIds
-    .map((teamId) => {
+    .flatMap<WeeklyCupResultRow>((teamId) => {
       const representativeId = representativeByTeam.get(teamId);
-      if (!representativeId) return null;
+      if (!representativeId) return [];
 
       const teamPoints = pointsByTeamId.get(teamId);
       const scorerId = activeScorerByTeamId.get(teamId);
       const scorer = scorerId ? playerById.get(scorerId) : null;
       const score = scorerId ? scoreByPlayer.get(scorerId) ?? null : null;
+      const didNotFinish = score?.did_not_finish === true;
       const gross = score?.gross_score == null ? null : Number(score.gross_score);
       const net =
         scorer && gross != null
           ? Number((gross - Number(scorer.handicap_index)).toFixed(2))
           : null;
 
-      return {
-        player_id: representativeId,
-        gross_score: gross,
-        net_score: net,
-        finish_position: teamPoints?.finishPosition ?? null,
-        points_earned: teamPoints?.pointsEarned ?? 0,
-      };
-    })
-    .filter((row): row is WeeklyCupResultRow => Boolean(row));
+      return [
+        {
+          player_id: representativeId,
+          gross_score: gross,
+          net_score: net,
+          finish_position: teamPoints?.finishPosition ?? null,
+          points_earned: teamPoints?.pointsEarned ?? 0,
+          did_not_finish: didNotFinish,
+        },
+      ];
+    });
 }
