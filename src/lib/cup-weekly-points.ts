@@ -72,7 +72,10 @@ export function computeWeeklyCupResults(params: {
   const teamIds = Array.from(membersByTeamId.keys());
   const activeTeamIds = new Set<string>();
   participation.forEach((row) => {
-    if (row.playing_this_week !== true || row.cup !== true || !eligibleIds.has(row.player_id)) {
+    // A globally Cup player who is marked playing occupies an active Cup position,
+    // even when the weekly Cup checkbox is off. They cannot submit a Cup score,
+    // but their team must not increase the vacant DNP-point pool.
+    if (row.playing_this_week !== true || !eligibleIds.has(row.player_id)) {
       return;
     }
     const teamId = teamIdByPlayerId.get(row.player_id);
@@ -155,9 +158,8 @@ export function computeWeeklyCupResults(params: {
       const candidateIds = getScoringCandidateIdsForTeam(memberIds);
       const scorerIdFromAssignments =
         candidateIds.find((memberId) => scoringIdSet.has(memberId) && isValidScorer(memberId)) ?? null;
-      const scorerId = scorerIdFromAssignments ?? pickBestValidScorer(candidateIds);
-      if (scorerId) {
-        activeScorerByTeamId.set(teamId, scorerId);
+      if (scorerIdFromAssignments) {
+        activeScorerByTeamId.set(teamId, scorerIdFromAssignments);
       }
     });
   } else {
