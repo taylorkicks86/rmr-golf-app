@@ -359,7 +359,7 @@ export default function StandingsPage() {
                     <td className="min-w-0 px-px py-1.5 text-xs font-medium text-zinc-900 sm:px-1">
                       <span className="block min-w-0 truncate">{row.player}</span>
                       <span className="mt-0.5 block text-[10px] font-normal text-zinc-500">
-                        Total {row.totalPoints} · {row.weeksCounted}/{countedWeeksTarget} counted · Drop {row.droppedWeeks}
+                        Total {row.totalPoints} · {row.weeksCounted}/{countedWeeksTarget} counted · Drop {rainedOutCount}
                       </span>
                     </td>
                     <td className="px-px py-1.5 text-center text-xs font-semibold text-zinc-900 sm:px-1">
